@@ -137,8 +137,11 @@ export default async function handler(req:any,res:any){
     for(const group of groups.values()){
       group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
-        const prev=group[i],next=group[i+1];if(!prev.destination||!next.origin||!prev.arrival_time||!next.pickup_time)continue;
-        const a=points.get(prev.destination),b=points.get(next.origin);if(!a||!b)continue;
+        const prev=group[i],next=group[i+1];
+        const previousEndLocation=prev.back&&prev.return_arrival_time?prev.origin:prev.destination;
+        const previousEndTime=prev.back&&prev.return_arrival_time?prev.return_arrival_time:prev.arrival_time;
+        if(!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
+        const a=points.get(previousEndLocation),b=points.get(next.origin);if(!a||!b)continue;
         const k=edgeKey(a,b);edgeMap.set(k,{key:k,from:a,to:b});connectionEdges.set(next.id,k);
       }
     }
@@ -161,11 +164,14 @@ export default async function handler(req:any,res:any){
     for(const group of groups.values()){
       group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
-        const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);if(!selectedIds.has(next.id)||!k||!prev.arrival_time||!next.pickup_time)continue;
+        const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);
+        const previousEndLocation=prev.back&&prev.return_arrival_time?prev.origin:prev.destination;
+        const previousEndTime=prev.back&&prev.return_arrival_time?prev.return_arrival_time:prev.arrival_time;
+        if(!selectedIds.has(next.id)||!k||!previousEndTime||!next.pickup_time)continue;
         connectionsChecked++;const required=routeTimes.get(k);
         if(required==null){warnings++;await db.from("duties").update({connection_status:"WARN",connection_error:"Could not calculate school-to-school connection time"}).eq("id",next.id);continue}
-        const available=span(mins(prev.arrival_time)!,mins(next.pickup_time)!);
-        if(required>available){connectionFailures++;const msg=`Connection impossible: ${prev.destination} → ${next.origin} needs about ${required} min but only ${available} min is available between passenger journeys.`;await db.from("duties").update({connection_status:"FAIL",connection_error:msg,connection_minutes:required,connection_available_minutes:available,overall_status:"FAIL"}).eq("id",next.id)}
+        const available=span(mins(previousEndTime)!,mins(next.pickup_time)!);
+        if(required>available){connectionFailures++;const msg=`Connection impossible: ${previousEndLocation} → ${next.origin} needs about ${required} min but only ${available} min is available between passenger journeys.`;await db.from("duties").update({connection_status:"FAIL",connection_error:msg,connection_minutes:required,connection_available_minutes:available,overall_status:"FAIL"}).eq("id",next.id)}
         else await db.from("duties").update({connection_status:"PASS",connection_error:null,connection_minutes:required,connection_available_minutes:available}).eq("id",next.id);
       }
     }
