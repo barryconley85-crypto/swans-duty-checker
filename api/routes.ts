@@ -112,12 +112,17 @@ export default async function handler(req:any,res:any){
     const {importId}=req.body??{};if(!importId)return res.status(400).json({error:"importId required"});
     const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}});
     const {data,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");if(error)throw error;
-    const rows=data??[],locations=[...new Set(rows.flatMap(d=>[d.origin,d.destination].filter(Boolean)).concat([depot]))] as string[];
+    const allRows=data??[],offset=Math.max(0,Number(req.body?.offset??0)),limit=Math.min(40,Math.max(1,Number(req.body?.limit??40)));
+    const selectedRows=allRows.slice(offset,offset+limit);
+    if(!selectedRows.length)return res.json({importId,processed:0,nextOffset:null,reconstructed:0,warnings:0,connectionsChecked:0,connectionFailures:0,routingProvider:"Postcodes.io + Photon/Nominatim + OSRM matrix"});
+    const selectedIds=new Set(selectedRows.map(d=>d.id));
+    const workRows=allRows.slice(Math.max(0,offset-1),Math.min(allRows.length,offset+limit+1));
+    const locations=[...new Set(workRows.flatMap(d=>[d.origin,d.destination].filter(Boolean)).concat([depot]))] as string[];
     const points=await geocodeMany(locations,process.env.OPENROUTESERVICE_API_KEY);
     const groups=new Map<string,any[]>();
-    for(const d of rows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
+    for(const d of workRows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
     const edgeMap=new Map<string,Edge>(),dutyEdges=new Map<string,{outbound:string,ret:string}>();
-    for(const d of rows){
+    for(const d of selectedRows){
       const a=d.origin?points.get(d.origin):null,b=d.destination?points.get(d.destination):null;if(!a||!b)continue;
       const out=edgeKey(a,b),ret=edgeKey(b,points.get(depot)!);edgeMap.set(out,{key:out,from:a,to:b});edgeMap.set(ret,{key:ret,from:b,to:points.get(depot)!});dutyEdges.set(d.id,{outbound:out,ret});
     }
@@ -149,7 +154,7 @@ export default async function handler(req:any,res:any){
     for(const group of groups.values()){
       group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
-        const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);if(!k||!prev.arrival_time||!next.pickup_time)continue;
+        const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);if(!selectedIds.has(next.id)||!k||!prev.arrival_time||!next.pickup_time)continue;
         connectionsChecked++;const required=routeTimes.get(k);
         if(required==null){warnings++;await db.from("duties").update({connection_status:"WARN",connection_error:"Could not calculate school-to-school connection time"}).eq("id",next.id);continue}
         const available=span(mins(prev.arrival_time)!,mins(next.pickup_time)!);
@@ -157,6 +162,6 @@ export default async function handler(req:any,res:any){
         else await db.from("duties").update({connection_status:"PASS",connection_error:null,connection_minutes:required,connection_available_minutes:available}).eq("id",next.id);
       }
     }
-    return res.json({importId,reconstructed,warnings,connectionsChecked,connectionFailures,routingProvider:"Postcodes.io + OSRM matrix"});
+    return res.json({importId,processed:selectedRows.length,nextOffset:offset+selectedRows.length<allRows.length?offset+selectedRows.length:null,reconstructed,warnings,connectionsChecked,connectionFailures,routingProvider:"Postcodes.io + Photon/Nominatim + OSRM matrix"});
   }catch(e){return res.status(400).json({error:e instanceof Error?e.message:"Route reconstruction failed"})}
 }
