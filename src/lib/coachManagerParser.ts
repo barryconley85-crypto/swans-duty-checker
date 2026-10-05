@@ -8,8 +8,7 @@ export function parseCoachManagerText(text:string):ParsedDuty[]{const lines=text
 for(const line of lines){if(/^(Coach Manager Printed:|Bookings - Driver Order|Driver Name Start|Record Count =|ORDER BY DriverID|Driver Name Driver Type)/.test(line))continue;const m=row.exec(line);
 if(!m?.groups){if(driverLine.test(line)&&!nonDrivers.has(line)&&!line.includes("Printed")){const d=line.trim();if(out.length&&!out[out.length-1].driver_name)out[out.length-1].driver_name=d;currentDriver=d;}continue}
 const g=m.groups;const ts=(clean(g.times)??"").split(/\s+/);const tail=clean(g.tail)??"";
-const idMatch=tail.match(/^([^\s]+)(?:\s+(TM|AP|CH))?(?:\s*)$/);const vehicleId=idMatch?.[1]?.toUpperCase()??tail.split(/\s+/)[0]?.toUpperCase()??null;
-let vehicleType=tail;if(idMatch)vehicleType=tail.slice(0,tail.length-(idMatch[0].length-idMatch[1].length)).trim();
+const prefixes=["38EXEC VIP","CAR SDSC","VIPCoach","PSVAR+1","DDSC","DDSB","SDSB","SDSC","Executive","CAR","EXEC"];const prefix=prefixes.find(p=>tail.startsWith(p+" ")||tail===p);const remainder=(prefix?tail.slice(prefix.length):tail).trim();const vehicleId=remainder.split(/\s+/)[0]?.toUpperCase()??null;const vehicleType=prefix??null;
 const candidate=clean(g.driver);if(candidate&&!nonDrivers.has(candidate))currentDriver=candidate;
 out.push({driver_name:currentDriver,vehicle_id:vehicleId,vehicle_type:vehicleType||null,seats:Number(g.seats),start_time:time(g.start),pickup_time:time(g.pickup),leave_time:time(ts[1]),arrival_time:time(ts[0]),finish_time:time(ts.length===4?ts[3]:ts[2]),origin:clean(g.origin),destination:clean(g.destination),stay:g.stay==="Yes",back:g.backFlag==="Yes",raw_text:line,sort_order:out.length+1});}
 return out}
