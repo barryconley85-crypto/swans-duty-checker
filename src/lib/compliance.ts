@@ -26,7 +26,7 @@ export const scheduledDutySegments=(rows:DutyTimes[])=>{
   return segments;
 };
 
-export const scheduledBreakMinutes=(rows:DutyTimes[],connectionMinutes:(number|null)=[]):number=>{
+export const scheduledBreakMinutes=(rows:DutyTimes[],connectionMinutes:(number|null)[]=[]):number=>{
   let breaks=0;
   rows.forEach((d,i)=>{
     const arrival=minutes(d.arrival_time),leave=minutes(d.leave_time);
