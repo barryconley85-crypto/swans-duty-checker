@@ -1,53 +1,100 @@
 import {createClient} from "@supabase/supabase-js";
+
 const depot="Swans Travel, Broadgate, Chadderton, OL9 9XA";
 const depotPostcode="OL9 9XA";
-const geocodeCache=new Map<string,[number,number]>();
+type Point=[number,number];
+type Edge={key:string,from:Point,to:Point};
+
 const mins=(v:string|null)=>{const m=v?.match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
 const span=(a:number,b:number)=>b>=a?b-a:b+1440-a;
 const add=(v:string,n:number)=>{const base=mins(v);if(base===null)throw Error("Cannot calculate from missing time");const x=((base+n)%1440+1440)%1440;return String(Math.floor(x/60)).padStart(2,"0")+":"+String(x%60).padStart(2,"0")};
 
-async function geo(q:string,key?:string){
-  const cached=geocodeCache.get(q);if(cached)return cached;
-  if(q===depot){const p=await geocodePostcode(depotPostcode);geocodeCache.set(q,p);return p}
-  if(key){
-    const u=new URL("https://api.heigit.org/pelias/v1/search");
-    u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
-    const r=await fetch(u,{headers:{Authorization:key}});
-    if(r.ok){const j:any=await r.json();const c=j.features?.[0]?.geometry?.coordinates;if(c)return c}
-  }
-  const pc=q.match(/\\b([A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2})\\b/i)?.[1];
-  if(pc){
-    try{const p=await geocodePostcode(pc);geocodeCache.set(q,p);return p}catch{}
-  }
+const pointKey=(p:Point)=>p.map(v=>v.toFixed(6)).join(",");
+const edgeKey=(a:Point,b:Point)=>pointKey(a)+"|"+pointKey(b);
+const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;
 
-  const u=new URL("https://nominatim.openstreetmap.org/search");
-  u.searchParams.set("q",q+", UK");u.searchParams.set("format","json");u.searchParams.set("limit","1");
-  const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-  if(!r.ok)throw Error("Geocode failed "+r.status);
-  const j:any=await r.json();if(!j[0])throw Error("Location could not be geocoded: "+q);
-  const p:[number,number]=[Number(j[0].lon),Number(j[0].lat)];geocodeCache.set(q,p);return p;
+async function geocodePostcodes(postcodes:string[]){
+  const out=new Map<string,Point>();
+  for(let i=0;i<postcodes.length;i+=100){
+    const batch=postcodes.slice(i,i+100);
+    const r=await fetch("https://api.postcodes.io/postcodes",{method:"POST",headers:{"Content-Type":"application/json","User-Agent":"Swans-Duty-Checker/1.0"},body:JSON.stringify({postcodes:batch})});
+    if(!r.ok)continue;
+    const j:any=await r.json();
+    for(const item of j.result??[]){
+      const p=item.result;
+      if(p?.longitude!=null&&p?.latitude!=null)out.set(item.query.replace(/\s+/g," ").toUpperCase(),[Number(p.longitude),Number(p.latitude)]);
+    }
+  }
+  return out;
 }
 
-async function geocodePostcode(postcode:string):Promise<[number,number]>{
-  const u="https://api.postcodes.io/postcodes/"+encodeURIComponent(postcode.replace(/\\s+/g,""));
-  const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-  if(!r.ok)throw Error("Postcode geocode failed "+r.status);
-  const j:any=await r.json();
-  if(!j.result?.longitude||!j.result?.latitude)throw Error("Postcode has no coordinates: "+postcode);
-  return [Number(j.result.longitude),Number(j.result.latitude)];
+async function geocodeMany(locations:string[],key?:string){
+  const result=new Map<string,Point>();
+  const postcodeMap=await geocodePostcodes([...new Set(locations.map(postcodeOf).filter(Boolean) as string[])]);
+  for(const q of locations){
+    const pc=postcodeOf(q);
+    if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
+  }
+  if(!result.has(depot)){
+    const p=postcodeMap.get(depotPostcode);if(p)result.set(depot,p);
+  }
+
+  const remaining=locations.filter(q=>!result.has(q));
+  for(let i=0;i<remaining.length;i+=5){
+    const batch=remaining.slice(i,i+5);
+    const vals=await Promise.all(batch.map(async q=>{
+      if(key){
+        const u=new URL("https://api.heigit.org/pelias/v1/search");
+        u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
+        const r=await fetch(u,{headers:{Authorization:key}});
+        if(r.ok){const j:any=await r.json();const c=j.features?.[0]?.geometry?.coordinates;if(c)return [q,[Number(c[0]),Number(c[1])] as Point] as const;}
+      }
+      const u=new URL("https://nominatim.openstreetmap.org/search");
+      u.searchParams.set("q",q+", UK");u.searchParams.set("format","json");u.searchParams.set("limit","1");
+      const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+      if(!r.ok)throw Error("Geocode failed "+r.status);
+      const j:any=await r.json();if(!j[0])throw Error("Location could not be geocoded: "+q);
+      return [q,[Number(j[0].lon),Number(j[0].lat)] as Point] as const;
+    }));
+    for(const [q,p] of vals)result.set(q,p);
+  }
+  if(!result.has(depot))throw Error("Depot postcode could not be geocoded: "+depotPostcode);
+  return result;
 }
 
-async function route(a:number[],b:number[],key?:string){
-  if(key){
-    const u="https://api.heigit.org/openrouteservice/v2/directions/driving-hgv";
-    const r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json","Authorization":key},body:JSON.stringify({coordinates:[a,b],units:"km"})});
-    if(r.ok){const j:any=await r.json();const d=j.routes?.[0]?.summary?.duration;if(d)return Math.ceil(d/60)}
-  }
-  const u="https://router.project-osrm.org/route/v1/driving/"+a[0]+","+a[1]+";"+b[0]+","+b[1]+"?overview=false";
+async function matrixBatch(edges:Edge[]){
+  const points:Point[]=[];const index=new Map<string,number>();
+  const idx=(p:Point)=>{const k=pointKey(p);const old=index.get(k);if(old!==undefined)return old;const i=points.length;points.push(p);index.set(k,i);return i};
+  const pairs=edges.map(e=>({from:idx(e.from),to:idx(e.to),key:e.key}));
+  const sources=[...new Set(pairs.map(p=>p.from))],destinations=[...new Set(pairs.map(p=>p.to))];
+  const u=new URL("https://router.project-osrm.org/table/v1/driving/"+points.map(p=>p.join(",")).join(";"));
+  u.searchParams.set("sources",sources.join(";"));u.searchParams.set("destinations",destinations.join(";"));u.searchParams.set("annotations","duration");
   const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-  if(!r.ok)throw Error("Routing failed "+r.status);
-  const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)throw Error("No route returned");
-  return Math.ceil(d/60);
+  if(!r.ok)throw Error("OSRM matrix failed "+r.status);
+  const j:any=await r.json();if(j.code!=="Ok")throw Error("OSRM matrix returned "+(j.code??"unknown error"));
+  const destIndex=new Map(destinations.map((v,i)=>[v,i]));const out=new Map<string,number>();
+  for(const p of pairs){const seconds=j.durations?.[sources.indexOf(p.from)]?.[destIndex.get(p.to)!];if(seconds!=null)out.set(p.key,Math.ceil(Number(seconds)/60));}
+  return out;
+}
+
+async function routeEdges(edges:Edge[]){
+  const out=new Map<string,number>();
+  for(let i=0;i<edges.length;i+=20){
+    const batch=edges.slice(i,i+20);
+    try{
+      const got=await matrixBatch(batch);for(const [k,v] of got)out.set(k,v);
+    }catch{
+      const vals=await Promise.all(batch.map(async e=>{
+        const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false";
+        const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+        if(!r.ok)throw Error("Routing failed "+r.status);
+        const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)throw Error("No route returned");
+        return [e.key,Math.ceil(Number(d)/60)] as const;
+      }));
+      for(const [k,v] of vals)out.set(k,v);
+    }
+  }
+  return out;
 }
 
 export default async function handler(req:any,res:any){
@@ -55,74 +102,54 @@ export default async function handler(req:any,res:any){
     if(req.method!=="POST")return res.status(405).json({error:"POST required"});
     const url=process.env.SUPABASE_URL,pub=process.env.SUPABASE_PUBLISHABLE_KEY,internal=process.env.DUTY_CHECKER_DB_KEY;
     if(!url||!pub||!internal)return res.status(503).json({error:"Supabase is not configured"});
-    const key=process.env.OPENROUTESERVICE_API_KEY;
+    const {importId}=req.body??{};if(!importId)return res.status(400).json({error:"importId required"});
     const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}});
-    const {importId}=req.body??{};
-    if(!importId)return res.status(400).json({error:"importId required"});
-    const {data,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");
-    if(error)throw error;
-
-    const depotPoint=await geo(depot,key);
-    let reconstructed=0,warnings=0,connectionsChecked=0,connectionFailures=0;
+    const {data,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");if(error)throw error;
+    const rows=data??[],locations=[...new Set(rows.flatMap(d=>[d.origin,d.destination].filter(Boolean)).concat([depot]))] as string[];
+    const points=await geocodeMany(locations,process.env.OPENROUTESERVICE_API_KEY);
     const groups=new Map<string,any[]>();
-    for(const d of data??[]){
-      if(d.driver_name){
-        const a=groups.get(d.driver_name)??[];
-        a.push(d);
-        groups.set(d.driver_name,a);
+    for(const d of rows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
+    const edgeMap=new Map<string,Edge>(),dutyEdges=new Map<string,{outbound:string,ret:string}>();
+    for(const d of rows){
+      const a=d.origin?points.get(d.origin):null,b=d.destination?points.get(d.destination):null;if(!a||!b)continue;
+      const out=edgeKey(a,b),ret=edgeKey(b,points.get(depot)!);edgeMap.set(out,{key:out,from:a,to:b});edgeMap.set(ret,{key:ret,from:b,to:points.get(depot)!});dutyEdges.set(d.id,{outbound:out,ret});
+    }
+    const connectionEdges=new Map<string,string>();
+    for(const group of groups.values()){
+      group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
+      for(let i=0;i<group.length-1;i++){
+        const prev=group[i],next=group[i+1];if(!prev.destination||!next.origin||!prev.arrival_time||!next.pickup_time)continue;
+        const a=points.get(prev.destination),b=points.get(next.origin);if(!a||!b)continue;
+        const k=edgeKey(a,b);edgeMap.set(k,{key:k,from:a,to:b});connectionEdges.set(next.id,k);
       }
     }
 
-    for(const d of data??[]){
-      if(!d.destination||!d.leave_time)continue;
+    const routeTimes=await routeEdges([...edgeMap.values()]);
+    let reconstructed=0,warnings=0,connectionsChecked=0,connectionFailures=0;
+    const updates:any[]=[];
+    for(const d of rows){
+      const e=dutyEdges.get(d.id);if(!e)continue;
       try{
-        const origin=await geo(d.origin||depot,key),dest=await geo(d.destination,key);
-        let arrival=d.arrival_time,finish=d.finish_time;
-        if(!arrival){arrival=add(d.leave_time,await route(origin,dest,key));reconstructed++}
-        if(!finish){finish=add(arrival,await route(dest,depotPoint,key));reconstructed++}
-        await db.from("duties").update({
-          arrival_time:arrival,
-          finish_time:finish,
-          arrival_estimated:!d.arrival_time,
-          finish_estimated:!d.finish_time,
-          route_status:"CALCULATED",
-          route_error:null,
-          outbound_route_minutes:await route(origin,dest,key),
-          return_route_minutes:await route(dest,depotPoint,key)
-        }).eq("id",d.id);
+        const outbound=routeTimes.get(e.outbound),ret=routeTimes.get(e.ret);let arrival=d.arrival_time,finish=d.finish_time;
+        if(!arrival){if(outbound==null)throw Error("No outbound route could be calculated");if(!d.leave_time)throw Error("Missing Leave time");arrival=add(d.leave_time,outbound);reconstructed++}
+        if(!finish){if(ret==null)throw Error("No return route could be calculated");finish=add(arrival,ret);reconstructed++}
         d.arrival_time=arrival;d.finish_time=finish;
-      }catch(e){
-        warnings++;
-        await db.from("duties").update({route_status:"WARN",route_error:e instanceof Error?e.message:"Route failed"}).eq("id",d.id);
+        updates.push({id:d.id,arrival_time:arrival,finish_time:finish,arrival_estimated:!d.arrival_time,finish_estimated:!d.finish_time,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
+      }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
+    }
+    for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
+
+    for(const group of groups.values()){
+      group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
+      for(let i=0;i<group.length-1;i++){
+        const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);if(!k||!prev.arrival_time||!next.pickup_time)continue;
+        connectionsChecked++;const required=routeTimes.get(k);
+        if(required==null){warnings++;await db.from("duties").update({connection_status:"WARN",connection_error:"Could not calculate school-to-school connection time"}).eq("id",next.id);continue}
+        const available=span(mins(prev.arrival_time)!,mins(next.pickup_time)!);
+        if(required>available){connectionFailures++;const msg=`Connection impossible: ${prev.destination} → ${next.origin} needs about ${required} min but only ${available} min is available between passenger journeys.`;await db.from("duties").update({connection_status:"FAIL",connection_error:msg,connection_minutes:required,connection_available_minutes:available,overall_status:"FAIL"}).eq("id",next.id)}
+        else await db.from("duties").update({connection_status:"PASS",connection_error:null,connection_minutes:required,connection_available_minutes:available}).eq("id",next.id);
       }
     }
-
-    for(const rows of groups.values()){
-      rows.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
-      for(let i=0;i<rows.length-1;i++){
-        const prev=rows[i],next=rows[i+1];
-        if(!prev.destination||!next.origin||!prev.arrival_time||!next.pickup_time)continue;
-        connectionsChecked++;
-        try{
-          const from=await geo(prev.destination,key),to=await geo(next.origin,key);
-          const required=await route(from,to,key);
-          const available=span(mins(prev.arrival_time)!,mins(next.pickup_time)!);
-          if(required>available){
-            connectionFailures++;
-            const errorText=`Connection impossible: ${prev.destination} → ${next.origin} needs about ${required} min but only ${available} min is available between passenger journeys.`;
-            await db.from("duties").update({connection_status:"FAIL",connection_error:errorText,connection_minutes:required,connection_available_minutes:available,overall_status:"FAIL"}).eq("id",next.id);
-          }else{
-            await db.from("duties").update({connection_status:"PASS",connection_error:null,connection_minutes:required,connection_available_minutes:available}).eq("id",next.id);
-          }
-        }catch(e){
-          warnings++;
-          await db.from("duties").update({connection_status:"WARN",connection_error:e instanceof Error?e.message:"Connection route failed"}).eq("id",next.id);
-        }
-      }
-    }
-
-    return res.json({importId,reconstructed,warnings,connectionsChecked,connectionFailures,routingProvider:key?"OpenRouteService with OSRM fallback":"OSRM fallback"});
-  }catch(e){
-    return res.status(400).json({error:e instanceof Error?e.message:"Route reconstruction failed"});
-  }
+    return res.json({importId,reconstructed,warnings,connectionsChecked,connectionFailures,routingProvider:"Postcodes.io + OSRM matrix"});
+  }catch(e){return res.status(400).json({error:e instanceof Error?e.message:"Route reconstruction failed"})}
 }
