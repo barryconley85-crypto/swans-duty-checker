@@ -40,9 +40,10 @@ async function geocodeMany(locations:string[],key?:string){
   }
 
   const remaining=locations.filter(q=>!result.has(q));
-  for(let i=0;i<remaining.length;i+=5){
-    const batch=remaining.slice(i,i+5);
-    const vals=await Promise.allSettled(batch.map(async q=>{
+  const geoBatches:string[][]=[];for(let i=0;i<remaining.length;i+=5)geoBatches.push(remaining.slice(i,i+5));
+  for(let i=0;i<geoBatches.length;i+=3){
+    const chunk=geoBatches.slice(i,i+3);
+    const all=await Promise.all(chunk.map(batch=>Promise.allSettled(batch.map(async q=>{
       if(key){
         const u=new URL("https://api.heigit.org/pelias/v1/search");
         u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
@@ -55,8 +56,8 @@ async function geocodeMany(locations:string[],key?:string){
       if(!r.ok)throw Error("Geocode failed "+r.status);
       const j:any=await r.json();if(!j[0])throw Error("Location could not be geocoded: "+q);
       return [q,[Number(j[0].lon),Number(j[0].lat)] as Point] as const;
-    }));
-    for(const v of vals)if(v.status==="fulfilled")result.set(v.value[0],v.value[1]);
+    }))));
+    for(const vals of all)for(const v of vals)if(v.status==="fulfilled")result.set(v.value[0],v.value[1]);
   }
   if(!result.has(depot))throw Error("Depot postcode could not be geocoded: "+depotPostcode);
   return result;
@@ -78,21 +79,22 @@ async function matrixBatch(edges:Edge[]){
 }
 
 async function routeEdges(edges:Edge[]){
-  const out=new Map<string,number>();
-  for(let i=0;i<edges.length;i+=20){
-    const batch=edges.slice(i,i+20);
-    try{
-      const got=await matrixBatch(batch);for(const [k,v] of got)out.set(k,v);
-    }catch{
-      const vals=await Promise.all(batch.map(async e=>{
-        const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false";
-        const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-        if(!r.ok)throw Error("Routing failed "+r.status);
-        const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)throw Error("No route returned");
-        return [e.key,Math.ceil(Number(d)/60)] as const;
-      }));
-      for(const [k,v] of vals)out.set(k,v);
-    }
+  const out=new Map<string,number>(),batches:Edge[][]=[];
+  for(let i=0;i<edges.length;i+=20)batches.push(edges.slice(i,i+20));
+  for(let i=0;i<batches.length;i+=4){
+    const results=await Promise.all(batches.slice(i,i+4).map(async batch=>{
+      try{return await matrixBatch(batch)}catch{
+        const vals=await Promise.all(batch.map(async e=>{
+          const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false";
+          const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+          if(!r.ok)throw Error("Routing failed "+r.status);
+          const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)throw Error("No route returned");
+          return [e.key,Math.ceil(Number(d)/60)] as const;
+        }));
+        return new Map(vals);
+      }
+    }));
+    for(const m of results)for(const [k,v] of m)out.set(k,v);
   }
   return out;
 }
