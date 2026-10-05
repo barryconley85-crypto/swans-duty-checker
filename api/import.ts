@@ -1,3 +1,6 @@
+import Busboy from "busboy";
+export const config={api:{bodyParser:false}};
+async function readUpload(req:any):Promise<{name:string;buffer:Buffer}>{return await new Promise((resolve,reject)=>{const bb=Busboy({headers:req.headers});let name="upload.pdf";const chunks:Buffer[]=[];bb.on("file",(_field:any,file:any,info:any)=>{name=info.filename||name;file.on("data",(x:Buffer)=>chunks.push(x));});bb.on("finish",()=>resolve({name,buffer:Buffer.concat(chunks)}));bb.on("error",reject);req.pipe(bb)})}
 import pdfParse from "pdf-parse"; import {createClient} from "@supabase/supabase-js"; import {nanoid} from "nanoid";
 const clean=(v:any)=>{const x=String(v??"").replace(/\\s+/g," ").trim();return x||null}; const time=(v:any)=>{const x=clean(v);const m=x?.match(/(\\d{2}:\\d{2})/);return m?.[1]??null};
 const nonDrivers=new Set(["ON HIRE","Bus St","Bus School","Shuttle Bus School","Grammar School","Hotel MUFC","Station timetable","RUN RUN"]);
