@@ -12,6 +12,13 @@ const add=(v:string,n:number)=>{const base=mins(v);if(base===null)throw Error("C
 const pointKey=(p:Point)=>p.map(v=>v.toFixed(6)).join(",");
 const edgeKey=(a:Point,b:Point)=>pointKey(a)+"|"+pointKey(b);
 const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;
+const knownLocationPostcodes:Record<string,string>={
+  "Manchester Grammar School":"M13 0XT",
+  "Savio House, Ingersley Road, Bollington,":"SK10 5RW",
+  "ST BEDES AM HALE":"WA15 0DB",
+  "Altrincham School Bus.":"WA14 1EN",
+  "Altrincham PM":"WA14 1EN"
+};
 
 async function geocodePostcodes(postcodes:string[]){
   const out=new Map<string,Point>();
@@ -30,9 +37,9 @@ async function geocodePostcodes(postcodes:string[]){
 
 async function geocodeMany(locations:string[],key?:string){
   const result=new Map<string,Point>();
-  const postcodeMap=await geocodePostcodes([...new Set(locations.map(postcodeOf).filter(Boolean) as string[])]);
+  const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(knownLocationPostcodes)])]);
   for(const q of locations){
-    const pc=postcodeOf(q);
+    const pc=knownLocationPostcodes[q]??postcodeOf(q);
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
