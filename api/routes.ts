@@ -139,7 +139,7 @@ export default async function handler(req:any,res:any){
     const routeTimes=await routeEdges([...edgeMap.values()]);
     let reconstructed=0,warnings=0,connectionsChecked=0,connectionFailures=0;
     const updates:any[]=[];
-    for(const d of rows){
+    for(const d of selectedRows){
       const e=dutyEdges.get(d.id);if(!e)continue;
       try{
         const outbound=routeTimes.get(e.outbound),ret=routeTimes.get(e.ret);const arrivalWasMissing=!d.arrival_time,finishWasMissing=!d.finish_time;let arrival=d.arrival_time,finish=d.finish_time;
