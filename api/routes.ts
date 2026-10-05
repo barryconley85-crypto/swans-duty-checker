@@ -42,7 +42,7 @@ async function geocodeMany(locations:string[],key?:string){
   const remaining=locations.filter(q=>!result.has(q));
   for(let i=0;i<remaining.length;i+=5){
     const batch=remaining.slice(i,i+5);
-    const vals=await Promise.all(batch.map(async q=>{
+    const vals=await Promise.allSettled(batch.map(async q=>{
       if(key){
         const u=new URL("https://api.heigit.org/pelias/v1/search");
         u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
@@ -50,13 +50,13 @@ async function geocodeMany(locations:string[],key?:string){
         if(r.ok){const j:any=await r.json();const c=j.features?.[0]?.geometry?.coordinates;if(c)return [q,[Number(c[0]),Number(c[1])] as Point] as const;}
       }
       const u=new URL("https://nominatim.openstreetmap.org/search");
-      u.searchParams.set("q",q+", UK");u.searchParams.set("format","json");u.searchParams.set("limit","1");
+      u.searchParams.set("q",q.replace(/\\b(AM|PM|RUN\\d+)\\b/gi,"").replace(/[*]/g,"")+" UK");u.searchParams.set("format","json");u.searchParams.set("limit","1");
       const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
       if(!r.ok)throw Error("Geocode failed "+r.status);
       const j:any=await r.json();if(!j[0])throw Error("Location could not be geocoded: "+q);
       return [q,[Number(j[0].lon),Number(j[0].lat)] as Point] as const;
     }));
-    for(const [q,p] of vals)result.set(q,p);
+    for(const v of vals)if(v.status==="fulfilled")result.set(v.value[0],v.value[1]);
   }
   if(!result.has(depot))throw Error("Depot postcode could not be geocoded: "+depotPostcode);
   return result;
