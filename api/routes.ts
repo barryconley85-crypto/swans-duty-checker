@@ -1,22 +1,40 @@
 import {createClient} from "@supabase/supabase-js";
 const depot="Swans Travel, Broadgate, Chadderton, OL9 9XA";
+const depotPostcode="OL9 9XA";
+const geocodeCache=new Map<string,[number,number]>();
 const mins=(v:string|null)=>{const m=v?.match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
 const span=(a:number,b:number)=>b>=a?b-a:b+1440-a;
 const add=(v:string,n:number)=>{const base=mins(v);if(base===null)throw Error("Cannot calculate from missing time");const x=((base+n)%1440+1440)%1440;return String(Math.floor(x/60)).padStart(2,"0")+":"+String(x%60).padStart(2,"0")};
 
 async function geo(q:string,key?:string){
+  const cached=geocodeCache.get(q);if(cached)return cached;
+  if(q===depot){const p=await geocodePostcode(depotPostcode);geocodeCache.set(q,p);return p}
   if(key){
     const u=new URL("https://api.heigit.org/pelias/v1/search");
     u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
     const r=await fetch(u,{headers:{Authorization:key}});
     if(r.ok){const j:any=await r.json();const c=j.features?.[0]?.geometry?.coordinates;if(c)return c}
   }
+  const pc=q.match(/\\b([A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2})\\b/i)?.[1];
+  if(pc){
+    try{const p=await geocodePostcode(pc);geocodeCache.set(q,p);return p}catch{}
+  }
+
   const u=new URL("https://nominatim.openstreetmap.org/search");
   u.searchParams.set("q",q+", UK");u.searchParams.set("format","json");u.searchParams.set("limit","1");
   const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
   if(!r.ok)throw Error("Geocode failed "+r.status);
   const j:any=await r.json();if(!j[0])throw Error("Location could not be geocoded: "+q);
-  return [Number(j[0].lon),Number(j[0].lat)];
+  const p:[number,number]=[Number(j[0].lon),Number(j[0].lat)];geocodeCache.set(q,p);return p;
+}
+
+async function geocodePostcode(postcode:string):Promise<[number,number]>{
+  const u="https://api.postcodes.io/postcodes/"+encodeURIComponent(postcode.replace(/\\s+/g,""));
+  const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+  if(!r.ok)throw Error("Postcode geocode failed "+r.status);
+  const j:any=await r.json();
+  if(!j.result?.longitude||!j.result?.latitude)throw Error("Postcode has no coordinates: "+postcode);
+  return [Number(j.result.longitude),Number(j.result.latitude)];
 }
 
 async function route(a:number[],b:number[],key?:string){
