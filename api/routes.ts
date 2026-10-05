@@ -132,11 +132,11 @@ export default async function handler(req:any,res:any){
     for(const d of rows){
       const e=dutyEdges.get(d.id);if(!e)continue;
       try{
-        const outbound=routeTimes.get(e.outbound),ret=routeTimes.get(e.ret);let arrival=d.arrival_time,finish=d.finish_time;
+        const outbound=routeTimes.get(e.outbound),ret=routeTimes.get(e.ret);const arrivalWasMissing=!d.arrival_time,finishWasMissing=!d.finish_time;let arrival=d.arrival_time,finish=d.finish_time;
         if(!arrival){if(outbound==null)throw Error("No outbound route could be calculated");if(!d.leave_time)throw Error("Missing Leave time");arrival=add(d.leave_time,outbound);reconstructed++}
         if(!finish){if(ret==null)throw Error("No return route could be calculated");finish=add(arrival,ret);reconstructed++}
         d.arrival_time=arrival;d.finish_time=finish;
-        updates.push({id:d.id,arrival_time:arrival,finish_time:finish,arrival_estimated:!d.arrival_time,finish_estimated:!d.finish_time,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
+        updates.push({id:d.id,arrival_time:arrival,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
       }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
     }
     for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
