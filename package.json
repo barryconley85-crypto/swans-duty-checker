@@ -1,6 +1,33 @@
 {
-  "name":"swans-duty-checker","private":true,"version":"0.1.0","type":"module",
-  "scripts":{"dev":"vite","build":"tsc -b && vite build","preview":"vite preview","test":"vitest run"},
-  "dependencies":{"@supabase/supabase-js":"^2.58.0","lucide-react":"^0.468.0","nanoid":"^5.0.9","pdf-parse":"^1.1.4","react":"^18.3.1","react-dom":"^18.3.1","superjson":"^2.2.2","zod":"^3.25.76"},
-  "devDependencies":{"@types/node":"^22.10.2","@types/pdf-parse":"^1.1.5","@types/react":"^18.3.18","@types/react-dom":"^18.3.5","@vitejs/plugin-react":"^4.3.4","typescript":"^5.7.2","vite":"^6.0.5","vitest":"^2.1.8"}
+  "name": "swans-duty-checker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.58.0",
+    "lucide-react": "^0.468.0",
+    "nanoid": "^5.0.9",
+    "pdf-parse": "^1.1.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "superjson": "^2.2.2",
+    "zod": "^3.25.76",
+    "busboy": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
 }
