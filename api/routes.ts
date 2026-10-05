@@ -128,39 +128,44 @@ export default async function handler(req:any,res:any){
     const points=await geocodeMany(locations,process.env.OPENROUTESERVICE_API_KEY);
     const groups=new Map<string,any[]>();
     for(const d of workRows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
-    const edgeMap=new Map<string,Edge>(),dutyEdges=new Map<string,{outbound:string,ret:string}>();
+    const edgeMap=new Map<string,Edge>(),dutyEdges=new Map<string,{outbound:string,ret:string,backReturn?:string,backFinish?:string}>();
     for(const d of selectedRows){
       const a=d.origin?points.get(d.origin):null,b=d.destination?points.get(d.destination):null;if(!a||!b)continue;
-      const out=edgeKey(a,b),ret=edgeKey(b,points.get(depot)!);edgeMap.set(out,{key:out,from:a,to:b});edgeMap.set(ret,{key:ret,from:b,to:points.get(depot)!});dutyEdges.set(d.id,{outbound:out,ret});
+      const out=edgeKey(a,b),ret=edgeKey(b,points.get(depot)!);edgeMap.set(out,{key:out,from:a,to:b});edgeMap.set(ret,{key:ret,from:b,to:points.get(depot)!});let backReturn:string|undefined,backFinish:string|undefined;if(d.back){backReturn=edgeKey(b,a);backFinish=edgeKey(a,points.get(depot)!);edgeMap.set(backReturn,{key:backReturn,from:b,to:a});edgeMap.set(backFinish,{key:backFinish,from:a,to:points.get(depot)!});}dutyEdges.set(d.id,{outbound:out,ret,backReturn,backFinish});
     }
-    const connectionEdges=new Map<string,string>();
+    let connectionEdges=new Map<string,string>();
+    let routeTimes=await routeEdges([...edgeMap.values()]);
+    let reconstructed=0,warnings=0,connectionsChecked=0,connectionFailures=0;
+    const updates:any[]=[];
+    for(const d of selectedRows){
+      const e=dutyEdges.get(d.id);if(!e)continue;
+      try{
+        const outbound=routeTimes.get(e.outbound),ret=d.back?routeTimes.get(e.backReturn!):routeTimes.get(e.ret),backFinish=e.backFinish?routeTimes.get(e.backFinish):null;
+        const arrivalWasMissing=!d.arrival_time,returnArrivalWasMissing=Boolean(d.back&&!d.return_arrival_time),finishWasMissing=!d.finish_time;
+        let arrival=d.arrival_time,returnArrival=d.return_arrival_time,finish=d.finish_time;
+        if(!arrival){if(outbound==null)throw Error("No outbound route could be calculated");if(!d.leave_time)throw Error("Missing Leave time");arrival=add(d.leave_time,outbound);reconstructed++}
+        if(d.back&&!returnArrival){const returnLeave=d.return_leave_time??d.leave_time;if(!returnLeave)throw Error("Missing return departure time");if(ret==null)throw Error("No return passenger route could be calculated");returnArrival=add(returnLeave,ret);reconstructed++}
+        if(!finish){if(d.back){if(!returnArrival)throw Error("Missing return arrival time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(returnArrival,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");finish=add(arrival,ret);reconstructed++}}
+        d.arrival_time=arrival;d.return_arrival_time=returnArrival;d.finish_time=finish;
+        updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,return_arrival_estimated:returnArrivalWasMissing,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
+      }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
+    }
+    for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
+
+    connectionEdges=new Map<string,string>();
+    const connectionEdgesToRoute:Edge[]=[];
     for(const group of groups.values()){
       group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
         const prev=group[i],next=group[i+1];
         const previousEndLocation=prev.back&&prev.return_arrival_time?prev.origin:prev.destination;
         const previousEndTime=prev.back&&prev.return_arrival_time?prev.return_arrival_time:prev.arrival_time;
-        if(!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
+        if(!selectedIds.has(next.id)||!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
         const a=points.get(previousEndLocation),b=points.get(next.origin);if(!a||!b)continue;
-        const k=edgeKey(a,b);edgeMap.set(k,{key:k,from:a,to:b});connectionEdges.set(next.id,k);
+        const k=edgeKey(a,b);connectionEdges.set(next.id,k);connectionEdgesToRoute.push({key:k,from:a,to:b});
       }
     }
-
-    const routeTimes=await routeEdges([...edgeMap.values()]);
-    let reconstructed=0,warnings=0,connectionsChecked=0,connectionFailures=0;
-    const updates:any[]=[];
-    for(const d of selectedRows){
-      const e=dutyEdges.get(d.id);if(!e)continue;
-      try{
-        const outbound=routeTimes.get(e.outbound),ret=routeTimes.get(e.ret);const arrivalWasMissing=!d.arrival_time,finishWasMissing=!d.finish_time;let arrival=d.arrival_time,finish=d.finish_time;
-        if(!arrival){if(outbound==null)throw Error("No outbound route could be calculated");if(!d.leave_time)throw Error("Missing Leave time");arrival=add(d.leave_time,outbound);reconstructed++}
-        if(!finish){if(ret==null)throw Error("No return route could be calculated");finish=add(arrival,ret);reconstructed++}
-        d.arrival_time=arrival;d.finish_time=finish;
-        updates.push({id:d.id,arrival_time:arrival,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
-      }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
-    }
-    for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
-
+    if(connectionEdgesToRoute.length){const connectionTimes=await routeEdges(connectionEdgesToRoute);for(const [k,v] of connectionTimes)routeTimes.set(k,v);}
     for(const group of groups.values()){
       group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
