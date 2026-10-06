@@ -1,5 +1,5 @@
 import {createClient} from "@supabase/supabase-js";
-import {minutes,spread,duration,addMinutes,screenWtdBreak,scheduledBreakOpportunities,allocateWtdBreaks,planEuDrivingBreaks} from "../src/lib/compliance.js";
+import {minutes,spread,duration,addMinutes,screenWtdBreak,scheduledBreakOpportunities,allocateWtdBreaks,planEuDrivingBreaks,wtdWorkingMinutes} from "../src/lib/compliance.js";
 
 const DOUBLE_MANNED_MAX=1260;
 const SINGLE_MANNED_MAX=900;
@@ -88,7 +88,7 @@ export default async function handler(req:any,res:any){
         if(euStatus==="FAIL")issues.push("Insufficient scheduled EU/assimilated driving-break opportunity");
         const overall=d.capacity_status==="FAIL"||hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL"||d.connection_status==="FAIL"?"FAIL":d.capacity_status==="WARN"?"WARN":"PASS";
         const hoursIssues=hours==="FAIL"?[isDoubleManned?"Double-manned working day exceeds the configured 21-hour screening threshold":"Working day exceeds the configured 15-hour screening threshold"]:[isDoubleManned?"Double-manned duty identified, 21-hour working-day threshold applied":"15-hour single-manned working-day threshold applied"];
-        const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
+        const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities (WTD working time ${actualWtdMinutes} min)`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
         const plannedEu=euPlan.plans.map(p=>`${p.minutes} min ${p.start}–${p.end}`).join(", ");
         const euIssues=euStatus==="FAIL"?[(euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min is planned from qualifying scheduled opportunities`)]:[plannedEu?`Planned driving breaks: ${plannedEu}`:`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
         await db.from("duties").update({
