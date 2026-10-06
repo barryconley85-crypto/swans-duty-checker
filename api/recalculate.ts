@@ -1,5 +1,5 @@
 import {createClient} from "@supabase/supabase-js";
-import {minutes,spread,screenWorkingDay,screenWtdBreak,scheduledBreakOpportunities,allocateWtdBreaks,allocateEuBreaks} from "../src/lib/compliance.js";
+import {minutes,spread,duration,addMinutes,screenWorkingDay,screenWtdBreak,scheduledBreakOpportunities,allocateWtdBreaks,allocateEuBreaks} from "../src/lib/compliance.js";
 
 export default async function handler(req:any,res:any){
   try{
@@ -57,6 +57,11 @@ export default async function handler(req:any,res:any){
       for(let i=0;i<rows.length;i++){
         const d=rows[i];
         const dutyBreaks=opportunities.map((o,idx)=>({...o,wtdAllocated:wtdAllocated[idx]?.wtdAllocated??0,euAllocated:euAllocated[idx]?.euAllocated??0})).filter(o=>o.wtdAllocated>0||o.euAllocated>0||o.source==="between_jobs"&&o.minutes>=15);
+        const next=rows[i+1];
+        const previousEndTime=d.back&&d.calculated_return_position_time?d.calculated_return_position_time:d.leave_time;
+        const nextTravel=d.connection_minutes??null;
+        const calculatedNextArrivalTime=next&&previousEndTime&&nextTravel!=null?addMinutes(previousEndTime,nextTravel):null;
+        const calculatedPositionAvailableMinutes=next&&previousEndTime&&next.pickup_time?duration(previousEndTime,next.pickup_time):null;
         const issues:string[]=[];
         if(d.capacity_status==="FAIL"||d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");
         if(hours==="FAIL")issues.push("Working day exceeds the configured 15-hour screening threshold");
@@ -80,7 +85,10 @@ export default async function handler(req:any,res:any){
           wtd_break_allocated_minutes:wtdTotal,
           eu_break_allocated_minutes:euTotal,
           eu_break_status:euStatus,
-          eu_break_issues:euIssues
+          eu_break_issues:euIssues,
+          calculated_next_arrival_time:calculatedNextArrivalTime,
+          calculated_position_travel_minutes:nextTravel,
+          calculated_position_available_minutes:calculatedPositionAvailableMinutes
         }).eq("id",d.id);
       }
     }
