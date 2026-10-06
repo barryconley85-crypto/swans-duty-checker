@@ -60,9 +60,12 @@ export const planEuDrivingBreaks=(rows:DutyTimes[],connectionMinutes:(number|nul
   const plans:EuDrivingPlan[]=[]; let continuousDriving=0,totalDriving=0,firstSplitUsed=false,oppIndex=0;
   const segments:{minutes:number}[]=[];
   rows.forEach((d,i)=>{
-    const passenger=duration(d.pickup_time,d.arrival_time); if(passenger!=null)segments.push({minutes:passenger});
+    const passenger=duration(d.pickup_time,d.arrival_time);
+    if(passenger!=null)segments.push({minutes:passenger});
+    if(d.back&&d.return_route_minutes!=null)segments.push({minutes:d.return_route_minutes});
     if(i<rows.length-1&&connectionMinutes[i]!=null)segments.push({minutes:connectionMinutes[i]!});
-    if(i===rows.length-1){if(d.return_route_minutes!=null)segments.push({minutes:d.return_route_minutes});if(d.back&&d.depot_return_route_minutes!=null)segments.push({minutes:d.depot_return_route_minutes});}
+    if(i===rows.length-1&&!d.back&&d.return_route_minutes!=null)segments.push({minutes:d.return_route_minutes});
+    if(i===rows.length-1&&d.back&&d.depot_return_route_minutes!=null)segments.push({minutes:d.depot_return_route_minutes});
   });
   for(const seg of segments){
     let remaining=seg.minutes;
