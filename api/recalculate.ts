@@ -57,14 +57,13 @@ export default async function handler(req:any,res:any){
           const own=groupTimingErrors.filter(x=>x.id===d.id).map(x=>x.msg);
           const issues=[...new Set([...own,...(d.connection_status==="FAIL"&&d.connection_error?[d.connection_error]:[])])];
           await db.from("duties").update({
-            overall_status:"FAIL",data_quality_status:own.length?"FAIL":"WARN",hours_status:"WARN",hours_issues:["Compliance blocked by invalid source timing"],
+            overall_status:(d.capacity_status==="FAIL"||d.connection_status==="FAIL")?"FAIL":"WARN",data_quality_status:own.length?"FAIL":"WARN",hours_status:"WARN",hours_issues:["Compliance blocked by invalid source timing"],
             wtd_status:"WARN",wtd_minutes:null,wtd_issues:["Compliance blocked by invalid source timing"],break_minutes:0,break_allocations:[],
             wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Compliance blocked by invalid source timing"],
             calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null,
             issues:issues.length?issues:["Invalid source timing detected"],
             connection_status:d.connection_status==="FAIL"?"FAIL":"NOT_CHECKED"
           }).eq("id",d.id);
-          failures++;
         }
         continue;
       }
