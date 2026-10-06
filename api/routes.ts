@@ -61,11 +61,12 @@ async function geocodePostcodes(postcodes:string[]){
   return out;
 }
 
-async function geocodeMany(locations:string[],key?:string){
+async function geocodeMany(locations:string[],key?:string,master:Record<string,string>={}){
   const result=new Map<string,Point>();
-  const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(knownLocationPostcodes)])]);
+  const locationMaster={...knownLocationPostcodes,...master};
+  const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
-    const pc=knownLocationPostcodes[q]??postcodeOf(q);
+    const pc=locationMaster[q]??postcodeOf(q);
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
@@ -144,6 +145,11 @@ export default async function handler(req:any,res:any){
     if(!url||!pub||!internal)return res.status(503).json({error:"Supabase is not configured"});
     const {importId}=req.body??{};if(!importId)return res.status(400).json({error:"importId required"});
     const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}});
+    const {data:routeMaster,error:routeMasterError}=await db.from("contract_route_master").select("alias,postcode").eq("active",true);
+    if(routeMasterError)throw routeMasterError;
+    const masterPostcodes:Record<string,string>={};
+    for(const row of routeMaster??[]){if(row.alias&&row.postcode)masterPostcodes[row.alias]=row.postcode;}
+
     const {data,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");if(error)throw error;
     const allRows=data??[],offset=Math.max(0,Number(req.body?.offset??0)),limit=Math.min(40,Math.max(1,Number(req.body?.limit??40)));
     const selectedRows=allRows.slice(offset,offset+limit);
@@ -151,7 +157,7 @@ export default async function handler(req:any,res:any){
     const selectedIds=new Set(selectedRows.map(d=>d.id));
     const workRows=allRows.slice(Math.max(0,offset-1),Math.min(allRows.length,offset+limit+1));
     const locations=[...new Set(workRows.flatMap(d=>[d.origin,d.destination].filter(Boolean)).concat([depot]))] as string[];
-    const points=await geocodeMany(locations,process.env.OPENROUTESERVICE_API_KEY);
+    const points=await geocodeMany(locations,process.env.OPENROUTESERVICE_API_KEY,masterPostcodes);
     const groups=new Map<string,any[]>();
     for(const d of workRows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
     const edgeMap=new Map<string,Edge>(),dutyEdges=new Map<string,{outbound:string,ret:string,backReturn?:string,backFinish?:string}>();
