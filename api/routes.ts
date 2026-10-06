@@ -172,8 +172,11 @@ export default async function handler(req:any,res:any){
     for(const d of selectedRows){
       // Clear derived connection results before every route run so changed contract mappings cannot leave stale PASS/FAIL data behind.
       await db.from("duties").update({
-        connection_status:"NOT_CHECKED",connection_error:null,connection_minutes:null,connection_available_minutes:null,
-        calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null
+        route_status:"NOT_CHECKED",route_error:null,
+        outbound_route_minutes:null,return_route_minutes:null,depot_return_route_minutes:null,
+        first_position_route_minutes:null,first_position_available_minutes:null,first_position_status:null,first_position_error:null,
+        calculated_return_position_time:null,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null,
+        connection_status:"NOT_CHECKED",connection_error:null,connection_minutes:null,connection_available_minutes:null
       }).eq("id",d.id);
       const pickupM=mins(d.pickup_time),leaveM=mins(d.leave_time),arrivalM=mins(d.arrival_time);
       if(arrivalM!==null&&leaveM!==null&&leaveM<arrivalM){
