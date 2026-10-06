@@ -51,10 +51,12 @@ export default async function handler(req:any,res:any){
         return_route_minutes:r.return_route_minutes??null,depot_return_route_minutes:r.depot_return_route_minutes??null
       }));
       const opportunities=scheduledBreakOpportunities(dutyTimes,connectionMinutes);
-      const wtdTarget=daySpread>540?45:daySpread>360?30:0;
+      const preliminaryWtdMinutes=wtdWorkingMinutes(daySpread,opportunities,0);
+      const wtdTarget=preliminaryWtdMinutes>540?45:preliminaryWtdMinutes>360?30:0;
       const wtdAllocated=allocateWtdBreaks(opportunities,wtdTarget);
       const wtdTotal=wtdAllocated.reduce((s,o)=>s+(o.wtdAllocated??0),0);
-      const wtd=screenWtdBreak(daySpread,wtdTotal);
+      const actualWtdMinutes=wtdWorkingMinutes(daySpread,opportunities,wtdTotal);
+      const wtd=screenWtdBreak(actualWtdMinutes,wtdTotal);
 
       const operationalDriving=rows.reduce((total,d,i)=>{
         let n=total+(d.outbound_route_minutes??0);
@@ -93,7 +95,7 @@ export default async function handler(req:any,res:any){
         const euIssues=euStatus==="FAIL"?[(euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min is planned from qualifying scheduled opportunities`)]:[plannedEu?`Planned driving breaks: ${plannedEu}`:`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
         await db.from("duties").update({
           overall_status:overall,hours_status:hours,duty_minutes:daySpread,break_minutes:wtdTotal,hours_issues:hoursIssues,
-          wtd_status:wtd,wtd_minutes:daySpread,wtd_issues:wtdIssues,issues,break_allocations:dutyBreaks,
+          wtd_status:wtd,wtd_minutes:actualWtdMinutes,wtd_issues:wtdIssues,issues,break_allocations:dutyBreaks,
           wtd_break_allocated_minutes:wtdTotal,eu_break_allocated_minutes:euTotal,eu_break_status:euStatus,eu_break_issues:euIssues,
           calculated_next_arrival_time:calculatedNextArrivalTime,calculated_position_travel_minutes:nextTravel,calculated_position_available_minutes:calculatedPositionAvailableMinutes
         }).eq("id",d.id);
