@@ -1,2 +1,36 @@
 import {createClient} from "@supabase/supabase-js";
-export default async function handler(_req:any,res:any){try{const url=process.env.SUPABASE_URL,pub=process.env.SUPABASE_PUBLISHABLE_KEY,internal=process.env.DUTY_CHECKER_DB_KEY;if(!url||!pub||!internal)return res.status(503).json({error:"Supabase is not configured",filename:null,recordCount:0,duties:[]});const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}});const {data:imp,error:ie}=await db.from("duty_imports").select("id,filename,page_count,record_count").order("imported_at",{ascending:false}).limit(1).maybeSingle();if(ie)throw ie;if(!imp)return res.json({importId:null,filename:null,recordCount:0,duties:[]});const {data:duties,error}=await db.from("duties").select("id,driver_name,vehicle_id,origin,destination,pickup_time,leave_time,arrival_time,finish_time,return_leave_time,return_arrival_time,return_arrival_estimated,calculated_return_position_time,calculated_next_arrival_time,calculated_position_travel_minutes,calculated_position_available_minutes,back,arrival_estimated,finish_estimated,capacity_status,hours_status,wtd_status,wtd_issues,overall_status,issues,data_quality_status,duty_minutes,driving_minutes,break_minutes,wtd_minutes,route_status,route_error,outbound_route_minutes,return_route_minutes,connection_status,connection_error,connection_minutes,undefined").eq("import_id",imp.id).order("sort_order");if(error)throw error;return res.json({importId:imp.id,filename:imp.filename,recordCount:imp.record_count,duties:(duties??[]).map(d=>({id:d.id,driverName:d.driver_name,vehicleId:d.vehicle_id,origin:d.origin,destination:d.destination,pickupTime:d.pickup_time,leaveTime:d.leave_time,arrivalTime:d.arrival_time,finishTime:d.finish_time,returnLeaveTime:d.return_leave_time,returnArrivalTime:d.return_arrival_time,returnArrivalEstimated:d.return_arrival_estimated,calculatedReturnPositionTime:d.calculated_return_position_time,calculatedNextArrivalTime:d.calculated_next_arrival_time,calculatedPositionTravelMinutes:d.calculated_position_travel_minutes,calculatedPositionAvailableMinutes:d.calculated_position_available_minutes,back:d.back,arrivalEstimated:d.arrival_estimated,finishEstimated:d.finish_estimated,capacityStatus:d.capacity_status,hoursStatus:d.hours_status,wtdStatus:d.wtd_status,wtdIssues:d.wtd_issues??[],overallStatus:d.overall_status,issues:d.issues??[],dataQualityStatus:d.data_quality_status,dutyMinutes:d.duty_minutes,drivingMinutes:d.driving_minutes,breakMinutes:d.break_minutes,wtdMinutes:d.wtd_minutes,routeStatus:d.route_status,routeError:d.route_error,outboundRouteMinutes:d.outbound_route_minutes,returnRouteMinutes:d.return_route_minutes,connectionStatus:d.connection_status,connectionError:d.connection_error,connectionMinutes:d.connection_minutes,connectionAvailableMinutes:d.connection_available_minutes,depot_return_route_minutes,break_allocations,wtd_break_allocated_minutes,eu_break_allocated_minutes,eu_break_status,eu_break_issues}))})}catch(e){return res.status(500).json({error:e instanceof Error?e.message:"Unable to load duties"})}}
+
+export default async function handler(_req:any,res:any){
+  try{
+    const url=process.env.SUPABASE_URL,pub=process.env.SUPABASE_PUBLISHABLE_KEY,internal=process.env.DUTY_CHECKER_DB_KEY;
+    if(!url||!pub||!internal)return res.status(503).json({error:"Supabase is not configured",filename:null,recordCount:0,duties:[]});
+    const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}});
+    const {data:imp,error:ie}=await db.from("duty_imports").select("id,filename,page_count,record_count").order("imported_at",{ascending:false}).limit(1).maybeSingle();
+    if(ie)throw ie;
+    if(!imp)return res.json({importId:null,filename:null,recordCount:0,duties:[]});
+    const {data:duties,error}=await db.from("duties").select("id,driver_name,vehicle_id,origin,destination,pickup_time,leave_time,arrival_time,finish_time,return_leave_time,return_arrival_time,return_arrival_estimated,calculated_return_position_time,calculated_next_arrival_time,calculated_position_travel_minutes,calculated_position_available_minutes,back,arrival_estimated,finish_estimated,capacity_status,hours_status,wtd_status,wtd_issues,overall_status,issues,data_quality_status,duty_minutes,driving_minutes,break_minutes,wtd_minutes,route_status,route_error,outbound_route_minutes,return_route_minutes,depot_return_route_minutes,connection_status,connection_error,connection_minutes,connection_available_minutes,break_allocations,wtd_break_allocated_minutes,eu_break_allocated_minutes,eu_break_status,eu_break_issues").eq("import_id",imp.id).order("sort_order");
+    if(error)throw error;
+    return res.json({
+      importId:imp.id,
+      filename:imp.filename,
+      recordCount:imp.record_count,
+      duties:(duties??[]).map(d=>({
+        id:d.id,driverName:d.driver_name,vehicleId:d.vehicle_id,origin:d.origin,destination:d.destination,
+        pickupTime:d.pickup_time,leaveTime:d.leave_time,arrivalTime:d.arrival_time,finishTime:d.finish_time,
+        returnLeaveTime:d.return_leave_time,returnArrivalTime:d.return_arrival_time,returnArrivalEstimated:d.return_arrival_estimated,
+        calculatedReturnPositionTime:d.calculated_return_position_time,calculatedNextArrivalTime:d.calculated_next_arrival_time,
+        calculatedPositionTravelMinutes:d.calculated_position_travel_minutes,calculatedPositionAvailableMinutes:d.calculated_position_available_minutes,
+        back:d.back,arrivalEstimated:d.arrival_estimated,finishEstimated:d.finish_estimated,capacityStatus:d.capacity_status,
+        hoursStatus:d.hours_status,wtdStatus:d.wtd_status,wtdIssues:d.wtd_issues??[],overallStatus:d.overall_status,
+        issues:d.issues??[],dataQualityStatus:d.data_quality_status,dutyMinutes:d.duty_minutes,drivingMinutes:d.driving_minutes,
+        breakMinutes:d.break_minutes,wtdMinutes:d.wtd_minutes,routeStatus:d.route_status,routeError:d.route_error,
+        outboundRouteMinutes:d.outbound_route_minutes,returnRouteMinutes:d.return_route_minutes,depotReturnRouteMinutes:d.depot_return_route_minutes,
+        connectionStatus:d.connection_status,connectionError:d.connection_error,connectionMinutes:d.connection_minutes,connectionAvailableMinutes:d.connection_available_minutes,
+        breakAllocations:d.break_allocations??[],wtdBreakAllocatedMinutes:d.wtd_break_allocated_minutes??0,
+        euBreakAllocatedMinutes:d.eu_break_allocated_minutes??0,euBreakStatus:d.eu_break_status??"NOT_REQUIRED",euBreakIssues:d.eu_break_issues??[]
+      }))
+    });
+  }catch(e){
+    return res.status(500).json({error:e instanceof Error?e.message:"Unable to load duties"});
+  }
+}
