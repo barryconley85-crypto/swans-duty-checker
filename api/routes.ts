@@ -145,10 +145,14 @@ export default async function handler(req:any,res:any){
     if(!url||!pub||!internal)return res.status(503).json({error:"Supabase is not configured"});
     const {importId}=req.body??{};if(!importId)return res.status(400).json({error:"importId required"});
     const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}});
-    const {data:routeMaster,error:routeMasterError}=await db.from("contract_route_master").select("alias,postcode").eq("active",true);
+    const {data:routeMaster,error:routeMasterError}=await db.from("contract_route_master").select("alias,postcode,service_key").eq("active",true);
     if(routeMasterError)throw routeMasterError;
     const masterPostcodes:Record<string,string>={};
-    for(const row of routeMaster??[]){if(row.alias&&row.postcode)masterPostcodes[row.alias]=row.postcode;}
+    const masterServices:Record<string,string>={};
+    for(const row of routeMaster??[]){
+      if(row.alias&&row.postcode)masterPostcodes[row.alias]=row.postcode;
+      if(row.alias&&row.service_key)masterServices[row.alias]=row.service_key;
+    }
 
     const {data,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");if(error)throw error;
     const allRows=data??[],offset=Math.max(0,Number(req.body?.offset??0)),limit=Math.min(40,Math.max(1,Number(req.body?.limit??40)));
@@ -179,7 +183,7 @@ export default async function handler(req:any,res:any){
         if(d.back){const returnLeave=d.return_leave_time??d.leave_time;if(!returnLeave)throw Error("Missing return departure time");if(ret==null)throw Error("No return passenger route could be calculated");calculatedReturnPosition=add(returnLeave,ret);reconstructed++}
         if(!finish){if(d.back){if(!calculatedReturnPosition)throw Error("Missing calculated return position time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(calculatedReturnPosition,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");if(!d.leave_time)throw Error("Missing Leave time for depot return");finish=add(d.leave_time,ret);reconstructed++}}
         d.arrival_time=arrival;d.return_arrival_time=returnArrival;d.finish_time=finish;
-        updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,calculated_return_position_time:calculatedReturnPosition,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null,depot_return_route_minutes:backFinish??null});
+        updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,calculated_return_position_time:calculatedReturnPosition,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null,depot_return_route_minutes:backFinish??null,contract_service_key:masterServices[d.origin]??masterServices[d.destination]??null});
       }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
     }
     for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
