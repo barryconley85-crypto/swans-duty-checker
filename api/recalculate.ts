@@ -71,7 +71,8 @@ export default async function handler(req:any,res:any){
         const overall=d.capacity_status==="FAIL"||hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL"||d.connection_status==="FAIL"?"FAIL":d.capacity_status==="WARN"?"WARN":"PASS";
         const hoursIssues=hours==="FAIL"?["Working day exceeds the configured 15-hour screening threshold"]:[];
         const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
-        const euIssues=euStatus==="FAIL"?[(euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min can be allocated from qualifying scheduled opportunities`)]:[`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
+        const plannedEu=euPlan.plans.map(p=>`${p.minutes} min ${p.start}–${p.end}`).join(", ");
+        const euIssues=euStatus==="FAIL"?[(euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min can be allocated from qualifying scheduled opportunities`)]:[plannedEu?`Planned driving breaks: ${plannedEu}`:`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
         await db.from("duties").update({
           overall_status:overall,
           hours_status:hours,
@@ -87,7 +88,6 @@ export default async function handler(req:any,res:any){
           eu_break_allocated_minutes:euTotal,
           eu_break_status:euStatus,
           eu_break_issues:euIssues,
-          eu_driving_plan:euPlan.plans,
           calculated_next_arrival_time:calculatedNextArrivalTime,
           calculated_position_travel_minutes:nextTravel,
           calculated_position_available_minutes:calculatedPositionAvailableMinutes
