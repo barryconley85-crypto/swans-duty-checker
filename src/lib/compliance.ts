@@ -39,6 +39,9 @@ export const scheduledBreakOpportunities=(rows:DutyTimes[],connectionMinutes:(nu
   return opportunities.sort((a,b)=>(minutes(a.start)??0)-(minutes(b.start)??0));
 };
 
+
+export const splitDutyMinutes=(opportunities:BreakOpportunity[],threshold=180)=>opportunities.filter(o=>o.minutes>threshold).reduce((sum,o)=>sum+o.minutes,0);
+export const wtdWorkingMinutes=(spreadMinutes:number,opportunities:BreakOpportunity[],allocatedBreakMinutes:number)=>Math.max(0,spreadMinutes-splitDutyMinutes(opportunities)-allocatedBreakMinutes);
 export const allocateWtdBreaks=(opportunities:BreakOpportunity[],target:number)=>{
   let remaining=target; return opportunities.map(o=>{if(remaining<=0||o.minutes<15)return {...o,wtdAllocated:0};const allocated=Math.min(remaining,o.minutes);remaining-=allocated;return {...o,wtdAllocated:allocated};});
 };
