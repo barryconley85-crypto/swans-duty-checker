@@ -8,7 +8,7 @@ export default async function handler(_req:any,res:any){
     const {data:imp,error:ie}=await db.from("duty_imports").select("id,filename,page_count,record_count").order("imported_at",{ascending:false}).limit(1).maybeSingle();
     if(ie)throw ie;
     if(!imp)return res.json({importId:null,filename:null,recordCount:0,duties:[]});
-    const {data:duties,error}=await db.from("duties").select("id,driver_name,vehicle_id,origin,destination,pickup_time,leave_time,arrival_time,finish_time,return_leave_time,return_arrival_time,return_arrival_estimated,calculated_return_position_time,calculated_next_arrival_time,calculated_position_travel_minutes,calculated_position_available_minutes,back,arrival_estimated,finish_estimated,capacity_status,hours_status,wtd_status,wtd_issues,overall_status,issues,data_quality_status,duty_minutes,driving_minutes,break_minutes,wtd_minutes,route_status,route_error,outbound_route_minutes,return_route_minutes,depot_return_route_minutes,connection_status,connection_error,connection_minutes,connection_available_minutes,break_allocations,wtd_break_allocated_minutes,eu_break_allocated_minutes,eu_break_status,eu_break_issues").eq("import_id",imp.id).order("sort_order");
+    const {data:duties,error}=await db.from("duties").select("id,driver_name,vehicle_id,origin,destination,pickup_time,leave_time,arrival_time,finish_time,return_leave_time,return_arrival_time,return_arrival_estimated,calculated_return_position_time,calculated_next_arrival_time,calculated_position_travel_minutes,calculated_position_available_minutes,back,arrival_estimated,finish_estimated,seats,vehicle_capacity,capacity_status,hours_status,wtd_status,wtd_issues,overall_status,issues,data_quality_status,duty_minutes,driving_minutes,break_minutes,wtd_minutes,route_status,route_error,outbound_route_minutes,return_route_minutes,depot_return_route_minutes,connection_status,connection_error,connection_minutes,connection_available_minutes,break_allocations,wtd_break_allocated_minutes,eu_break_allocated_minutes,eu_break_status,eu_break_issues").eq("import_id",imp.id).order("sort_order");
     if(error)throw error;
     return res.json({
       importId:imp.id,
@@ -20,7 +20,7 @@ export default async function handler(_req:any,res:any){
         returnLeaveTime:d.return_leave_time,returnArrivalTime:d.return_arrival_time,returnArrivalEstimated:d.return_arrival_estimated,
         calculatedReturnPositionTime:d.calculated_return_position_time,calculatedNextArrivalTime:d.calculated_next_arrival_time,
         calculatedPositionTravelMinutes:d.calculated_position_travel_minutes,calculatedPositionAvailableMinutes:d.calculated_position_available_minutes,
-        back:d.back,arrivalEstimated:d.arrival_estimated,finishEstimated:d.finish_estimated,capacityStatus:d.capacity_status,
+        back:d.back,arrivalEstimated:d.arrival_estimated,finishEstimated:d.finish_estimated,seats:d.seats??null,vehicleCapacity:d.vehicle_capacity??null,capacityStatus:d.capacity_status,
         hoursStatus:d.hours_status,wtdStatus:d.wtd_status,wtdIssues:d.wtd_issues??[],overallStatus:d.overall_status,
         issues:d.issues??[],dataQualityStatus:d.data_quality_status,dutyMinutes:d.duty_minutes,drivingMinutes:d.driving_minutes,
         breakMinutes:d.break_minutes,wtdMinutes:d.wtd_minutes,routeStatus:d.route_status,routeError:d.route_error,
