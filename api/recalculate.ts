@@ -86,7 +86,7 @@ export default async function handler(req:any,res:any){
         const calculatedNextArrivalTime=next&&previousEndTime&&nextTravel!=null?addMinutes(previousEndTime,nextTravel):null;
         const calculatedPositionAvailableMinutes=next&&previousEndTime&&next.pickup_time?duration(previousEndTime,next.pickup_time):null;
         const issues:string[]=[];
-        if(d.capacity_status==="FAIL"||d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");
+        if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");else if(d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");
         if(hours==="FAIL")issues.push(isDoubleManned?"Double-manned working day exceeds the configured 21-hour threshold":"Working day exceeds the configured 15-hour screening threshold");
         if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);
         if(euStatus==="FAIL")issues.push("Insufficient scheduled EU/assimilated driving-break opportunity");
