@@ -68,7 +68,7 @@ async function geocodeMany(locations:string[],key?:string,master:Record<string,s
   const locationMaster={...knownLocationPostcodes,...master};
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
-    const pc=locationMaster[q]??postcodeOf(q);
+    const pc=isOperationalLabel(q)?null:(locationMaster[q]??postcodeOf(q));
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
