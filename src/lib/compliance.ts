@@ -32,7 +32,7 @@ export const scheduledBreakMinutes=(rows:DutyTimes[],connectionMinutes:(number|n
     const arrival=minutes(d.arrival_time),leave=minutes(d.leave_time);
     if(arrival!==null&&leave!==null)breaks+=duration(d.arrival_time,d.leave_time)??0;
     if(i<rows.length-1){
-      const a=minutes(d.arrival_time),b=minutes(rows[i+1].pickup_time);
+      const a=minutes(d.leave_time),b=minutes(rows[i+1].pickup_time);
       if(a!==null&&b!==null){
         const available=spread(a,b);
         const route=connectionMinutes[i];
