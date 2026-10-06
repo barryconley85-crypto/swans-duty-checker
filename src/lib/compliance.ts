@@ -101,30 +101,32 @@ export const allocateEuBreaks=(opportunities:BreakOpportunity[],target:number)=>
   return out;
 };
 
-export type EuDrivingPlan={start:string;end:string;minutes:number;allocation:15|30|45;description:string};
+export type EuDrivingPlan={start:string;end:string;minutes:15|30|45;description:string};
 
 export const planEuDrivingBreaks=(rows:DutyTimes[],connectionMinutes:(number|null)[]=[]):{plans:EuDrivingPlan[];drivingMinutes:number;status:"PASS"|"FAIL";issue:string|null}=>{
-  const plans:EuDrivingPlan[]=[];let driving=0;let waitingForThirty=false;let lastResetDriving=0;let totalDriving=0;
-  const opp=scheduledBreakOpportunities(rows,connectionMinutes);
-  const segments:{minutes:number;label:string}[]=[];
+  const opportunities=scheduledBreakOpportunities(rows,connectionMinutes).filter(o=>o.minutes>=15);
+  const segments:{minutes:number}[]=[];
   rows.forEach((d,i)=>{
-    const out=d.pickup_time&&d.arrival_time?duration(d.pickup_time,d.arrival_time):null;if(out!=null)segments.push({minutes:out,label:"Passenger journey"});
-    if(i<rows.length-1){const conn=connectionMinutes[i];if(conn!=null)segments.push({minutes:conn,label:"Reposition to next job"});}
-    if(i===rows.length-1){const ret=d.return_route_minutes??null;if(ret!=null)segments.push({minutes:ret,label:"Return journey"});}
+    const passenger=duration(d.pickup_time,d.arrival_time);if(passenger!=null)segments.push({minutes:passenger});
+    if(i<rows.length-1&&connectionMinutes[i]!=null)segments.push({minutes:connectionMinutes[i]!});
+    if(i===rows.length-1){const ret=(d as any).return_route_minutes as number|null|undefined;if(ret!=null)segments.push({minutes:ret});}
   });
-  const events=opp.map(o=>({...o,used:false}));let oi=0;
+  const plans:EuDrivingPlan[]=[];let driving=0,totalDriving=0,splitStarted=false,oppIndex=0;
   for(const seg of segments){
-    let left=seg.minutes;while(left>0){
-      if(driving>=270){return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver exceeds 4.5 hours driving without the required EU driving break."};}
-      const room=270-driving;const take=Math.min(left,room);driving+=take;totalDriving+=take;left-=take;
-      if(left===0)break;
+    let remaining=seg.minutes;
+    while(remaining>0){
+      const next=opportunities[oppIndex];
+      if(next&&next.minutes>=15&&driving>=255){
+        if(next.minutes>=45){plans.push({start:next.start,end:next.end,minutes:45,description:"Planned full 45-minute EU driving break"});driving=0;splitStarted=false;oppIndex++;continue;}
+        if(!splitStarted){plans.push({start:next.start,end:next.end,minutes:15,description:"Planned first 15 minutes of split EU driving break"});driving=0;splitStarted=true;oppIndex++;continue;}
+        if(next.minutes>=30){plans.push({start:next.start,end:next.end,minutes:30,description:"Planned second 30 minutes of split EU driving break"});driving=0;splitStarted=false;oppIndex++;continue;}
+      }
+      const room=270-driving;const take=Math.min(remaining,room);driving+=take;totalDriving+=take;remaining-=take;
+      if(remaining>0&&driving>=270){return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver reaches 4.5 hours driving before a qualifying break opportunity."};}
     }
-    while(oi<events.length&&minutes(events[oi].start)!==null){const e=events[oi];if(e.used){oi++;continue;}if(e.minutes<15){oi++;continue;}if(driving>=255){
-      if(!waitingForThirty){const alloc=e.minutes>=45?45:15;plans.push({start:e.start,end:e.end,minutes:alloc as 15|45,allocation:alloc as 15|45,description:alloc===45?"Planned full EU driving break":"Planned first 15 min of split EU driving break"});e.used=true;if(alloc===45){driving=0;waitingForThirty=false}else waitingForThirty=true;oi++;continue;}
-      if(waitingForThirty&&e.minutes>=30){plans.push({start:e.start,end:e.end,minutes:30,allocation:30,description:"Planned second 30 min of split EU driving break"});e.used=true;driving=0;waitingForThirty=false;oi++;continue;}
-    }break;}
   }
-  if(driving>=270||waitingForThirty)return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:waitingForThirty?"A 15-minute split break was planned, but the required 30-minute second part was not available.":"Driver reaches 4.5 hours driving without a qualifying break."};
+  if(driving>270)return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver exceeds 4.5 hours driving without the required EU driving break."};
+  if(splitStarted)return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"A 15-minute split break is planned, but a later 30-minute second part is not available."};
   return {plans,drivingMinutes:totalDriving,status:"PASS",issue:null};
 };
 
