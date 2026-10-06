@@ -23,6 +23,7 @@ export type BreakOpportunity={
   minutes:number;
   source:"passenger_layover"|"between_jobs";
   description:string;
+  dutyIndex:number;
 };
 
 export const passengerStart=(d:DutyTimes)=>d.pickup_time;
@@ -48,6 +49,7 @@ export const scheduledBreakOpportunities=(rows:DutyTimes[],connectionMinutes:(nu
       end:d.leave_time!,
       minutes:layover,
       source:"passenger_layover",
+      dutyIndex:i,
       description:`Passenger journey complete at ${d.destination??"destination"} — scheduled layover before Leave`
     });
     if(i<rows.length-1){
@@ -62,6 +64,7 @@ export const scheduledBreakOpportunities=(rows:DutyTimes[],connectionMinutes:(nu
           end:next.pickup_time!,
           minutes:breakMinutes,
           source:"between_jobs",
+          dutyIndex:i,
           description:`Between jobs: arrive at ${next.origin??"next position"} after estimated ${route} min reposition`
         });
       }
