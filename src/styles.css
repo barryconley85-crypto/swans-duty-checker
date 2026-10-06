@@ -4,3 +4,5 @@
 
 /* Onward journey audit */
 .time-summary .next-position{display:grid;gap:3px;border:1px solid #d8e0e5;border-radius:6px;padding:9px;background:#fbfcfd}.time-summary .next-position>b{font-size:11px;letter-spacing:.06em}.time-summary .next-position strong{color:#19734a;font-size:12px}.time-summary .next-position.onward-fail{border-color:#e3aaaa;background:#fff7f7}.time-summary .next-position.onward-fail strong{color:#b13a3a}.time-summary .next-position small{font-size:11px}.time-summary .next-position small b{font-size:12px}
+
+.time-summary .depot-finish{border-top:1px solid #edf1f3;padding-top:8px;font-weight:800}.time-summary .depot-finish b{font-size:18px}
