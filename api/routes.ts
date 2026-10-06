@@ -145,7 +145,7 @@ export default async function handler(req:any,res:any){
         let arrival=d.arrival_time,returnArrival=d.return_arrival_time,finish=d.finish_time;
         if(!arrival){if(outbound==null)throw Error("No outbound route could be calculated");if(!d.leave_time)throw Error("Missing Leave time");arrival=add(d.leave_time,outbound);reconstructed++}
         if(d.back&&!returnArrival){const returnLeave=d.return_leave_time??d.leave_time;if(!returnLeave)throw Error("Missing return departure time");if(ret==null)throw Error("No return passenger route could be calculated");returnArrival=add(returnLeave,ret);reconstructed++}
-        if(!finish){if(d.back){if(!returnArrival)throw Error("Missing return arrival time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(returnArrival,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");finish=add(arrival,ret);reconstructed++}}
+        if(!finish){if(d.back){if(!returnArrival)throw Error("Missing return arrival time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(returnArrival,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");if(!d.leave_time)throw Error("Missing Leave time for depot return");finish=add(d.leave_time,ret);reconstructed++}}
         d.arrival_time=arrival;d.return_arrival_time=returnArrival;d.finish_time=finish;
         updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,return_arrival_estimated:returnArrivalWasMissing,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
       }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
@@ -159,7 +159,11 @@ export default async function handler(req:any,res:any){
       for(let i=0;i<group.length-1;i++){
         const prev=group[i],next=group[i+1];
         const previousEndLocation=prev.back&&prev.return_arrival_time?prev.origin:prev.destination;
-        const previousEndTime=prev.back&&prev.return_arrival_time?prev.return_arrival_time:prev.arrival_time;
+        // Operational chaining ends when the passenger journey is complete.
+        // Contractual Start/Finish times are duty-time markers, not school-to-school movement constraints.
+        const previousEndTime=prev.back&&prev.return_arrival_time
+          ? prev.return_arrival_time
+          : prev.leave_time;
         if(!selectedIds.has(next.id)||!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
         const a=points.get(previousEndLocation),b=points.get(next.origin);if(!a||!b)continue;
         const k=edgeKey(a,b);connectionEdges.set(next.id,k);connectionEdgesToRoute.push({key:k,from:a,to:b});
@@ -171,7 +175,10 @@ export default async function handler(req:any,res:any){
       for(let i=0;i<group.length-1;i++){
         const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);
         const previousEndLocation=prev.back&&prev.return_arrival_time?prev.origin:prev.destination;
-        const previousEndTime=prev.back&&prev.return_arrival_time?prev.return_arrival_time:prev.arrival_time;
+        // Use passenger journey completion/Leave, never the contractual depot Finish.
+        const previousEndTime=prev.back&&prev.return_arrival_time
+          ? prev.return_arrival_time
+          : prev.leave_time;
         if(!selectedIds.has(next.id)||!k||!previousEndTime||!next.pickup_time)continue;
         connectionsChecked++;const required=routeTimes.get(k);
         if(required==null){warnings++;await db.from("duties").update({connection_status:"WARN",connection_error:"Could not calculate school-to-school connection time"}).eq("id",next.id);continue}
