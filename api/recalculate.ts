@@ -107,11 +107,17 @@ export default async function handler(req:any,res:any){
         const hoursIssues=hours==="FAIL"?[isDoubleManned?"Double-manned working day exceeds the configured 21-hour screening threshold":"Working day exceeds the configured 15-hour screening threshold"]:[isDoubleManned?"Double-manned duty identified, 21-hour working-day threshold applied":"15-hour single-manned working-day threshold applied"];
         const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities (WTD working time ${actualWtdMinutes} min)`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
         const plannedEu=euPlan.plans.map(p=>`${p.minutes} min ${p.start}–${p.end}`).join(", ");
-        const euIssues=euStatus==="FAIL"?[euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min is planned from qualifying scheduled opportunities`]:[plannedEu?`Planned driving breaks: ${plannedEu}`:`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
+        const dutyWtdAllocated=dutyBreaks.reduce((s,o)=>s+(o.wtdAllocated??0),0);
+        const dutyEuAllocated=dutyBreaks.reduce((s,o)=>s+(o.euAllocated??0),0);
+        const dutyDriving=(i===0?(d.first_position_route_minutes??0):0)+(d.outbound_route_minutes??0)+(d.back?(d.return_route_minutes??0):0)+(i<rows.length-1?(d.connection_minutes??0):(d.back?(d.depot_return_route_minutes??0):(d.return_route_minutes??0)));
+        const dutyEuIssues=euStatus==="FAIL"
+          ? [`Driver-day EU/assimilated break requirement: ${euTarget} min; daily plan allocated ${euTotal} min`,euPlan.issue??"Driver reaches 4.5 hours driving before a qualifying break can be completed."]
+          : [dutyEuAllocated>0?`This duty carries ${dutyEuAllocated} min of the driver's planned EU/assimilated break allocation`:"No EU/assimilated break allocated on this duty"];
         await db.from("duties").update({
-          overall_status:overall,data_quality_status:dataQuality,hours_status:hours,duty_minutes:daySpread,break_minutes:wtdTotal,hours_issues:hoursIssues,
-          wtd_status:wtd,wtd_minutes:actualWtdMinutes,wtd_issues:wtdIssues,issues,break_allocations:dutyBreaks,
-          wtd_break_allocated_minutes:wtdTotal,eu_break_allocated_minutes:euTotal,eu_break_status:euStatus,eu_break_issues:euIssues,
+          overall_status:overall,data_quality_status:dataQuality,hours_status:hours,duty_minutes:daySpread,driving_minutes:dutyDriving,break_minutes:dutyWtdAllocated,hours_issues:hoursIssues,
+          wtd_status:wtd,wtd_minutes:actualWtdMinutes,wtd_issues:[`Driver-day WTD allocation: ${wtdTotal}/${wtdTarget} min`,...wtdIssues],
+          issues,break_allocations:dutyBreaks,
+          wtd_break_allocated_minutes:dutyWtdAllocated,eu_break_allocated_minutes:dutyEuAllocated,eu_break_status:euStatus,eu_break_issues:dutyEuIssues,
           calculated_next_arrival_time:calculatedNextArrivalTime,calculated_position_travel_minutes:nextTravel,calculated_position_available_minutes:calculatedPositionAvailableMinutes,
           connection_status:next?d.connection_status??"NOT_CHECKED":"NOT_CHECKED"
         }).eq("id",d.id);
