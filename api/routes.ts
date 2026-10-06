@@ -163,7 +163,7 @@ export default async function handler(req:any,res:any){
         // Contractual Start/Finish times are duty-time markers, not school-to-school movement constraints.
         const previousEndTime=prev.back&&prev.calculated_return_position_time
           ? prev.calculated_return_position_time
-          : prev.leave_time;
+          : prev.arrival_time;
         if(!selectedIds.has(next.id)||!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
         const a=points.get(previousEndLocation),b=points.get(next.origin);if(!a||!b)continue;
         const k=edgeKey(a,b);connectionEdges.set(next.id,k);connectionEdgesToRoute.push({key:k,from:a,to:b});
@@ -175,7 +175,7 @@ export default async function handler(req:any,res:any){
       for(let i=0;i<group.length-1;i++){
         const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);
         const previousEndLocation=prev.back&&prev.calculated_return_position_time?prev.origin:prev.destination;
-        // Use passenger journey completion/Leave, never the contractual depot Finish.
+        // Use passenger journey completion/arrival, never the contractual depot Finish or departure time.
         const previousEndTime=prev.back&&prev.calculated_return_position_time
           ? prev.calculated_return_position_time
           : prev.leave_time;
