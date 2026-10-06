@@ -11,7 +11,7 @@ const add=(v:string,n:number)=>{const base=mins(v);if(base===null)throw Error("C
 
 const pointKey=(p:Point)=>p.map(v=>v.toFixed(6)).join(",");
 const edgeKey=(a:Point,b:Point)=>pointKey(a)+"|"+pointKey(b);
-const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;
+const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;\nconst isOperationalLabel=(q:string)=>/^(WORSLEY ROUTE(?: - MGS)?|ROUTE [12] - |ST BEDES (?:AM|PM)|OHGS - |COACH \d|4 X PICK UPS|CLEANING(?: AT SWANS)?|STANDBY\b|WORK DAY|HOLIDAY|SICK|REST DAY)/i.test(String(q).trim());
 const knownLocationPostcodes:Record<string,string>={
   "Manchester Grammar School":"M13 0XT",
   "The Manchester Grammar School":"M13 0XT",
@@ -75,7 +75,7 @@ async function geocodeMany(locations:string[],key?:string,master:Record<string,s
     const p=postcodeMap.get(depotPostcode);if(p)result.set(depot,p);
   }
 
-  const remaining=locations.filter(q=>!result.has(q));
+  const remaining=locations.filter(q=>!result.has(q)&&!isOperationalLabel(q));
   const geoBatches:string[][]=[];for(let i=0;i<remaining.length;i+=5)geoBatches.push(remaining.slice(i,i+5));
   for(let i=0;i<geoBatches.length;i+=3){
     const chunk=geoBatches.slice(i,i+3);
@@ -166,7 +166,7 @@ export default async function handler(req:any,res:any){
     const points=await geocodeMany(locations,process.env.OPENROUTESERVICE_API_KEY,masterPostcodes);
     const groups=new Map<string,any[]>();
     const firstDutyIds=new Set<string>();
-    for(const d of workRows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
+    for(const d of allRows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
     for(const rows of groups.values()){rows.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));if(rows[0]?.id)firstDutyIds.add(rows[0].id);}
     const edgeMap=new Map<string,Edge>(),dutyEdges=new Map<string,{first?:string,outbound:string,ret:string,backReturn?:string,backFinish?:string}>();
     for(const d of selectedRows){
@@ -205,7 +205,7 @@ export default async function handler(req:any,res:any){
         if(d.back){const returnLeave=d.return_leave_time??d.leave_time;if(!returnLeave)throw Error("Missing return departure time");if(ret==null)throw Error("No return passenger route could be calculated");calculatedReturnPosition=add(returnLeave,ret);reconstructed++}
         if(!finish){if(d.back){if(!calculatedReturnPosition)throw Error("Missing calculated return position time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(calculatedReturnPosition,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");if(!d.leave_time)throw Error("Missing Leave time for depot return");finish=add(d.leave_time,ret);reconstructed++}}
         d.arrival_time=arrival;d.return_arrival_time=returnArrival;d.finish_time=finish;
-        const isFirstDuty=firstDutyIds.has(d.id); const pickupForFirst=mins(d.pickup_time); const firstAvailable=isFirstDuty&&(mins(d.start_time)??null)!==null&&pickupForFirst!==null&&first!=null?span((mins(d.start_time)??0)+30,pickupForFirst):null; const firstFeasible=!isFirstDuty||first!=null&&firstAvailable!=null?(!isFirstDuty||first!<=firstAvailable!):false; updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,calculated_return_position_time:calculatedReturnPosition,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:firstFeasible?"CALCULATED":"WARN",route_error:firstFeasible?null:`First position impossible: depot → ${d.origin} needs about ${first??0} min but only ${firstAvailable??0} min is available after the 30-minute vehicle check period.`,first_position_route_minutes:first??null,first_position_available_minutes:firstAvailable,first_position_status:firstFeasible?"PASS":"FAIL",first_position_error:firstFeasible?null:`Depot → ${d.origin} requires about ${first??0} min; available from ${add(d.start_time!,30)} to ${d.pickup_time} is ${firstAvailable??0} min.`,outbound_route_minutes:outbound??null,return_route_minutes:ret??null,depot_return_route_minutes:backFinish??null,contract_service_key:inferServiceKey(d,masterServices)});
+        const isFirstDuty=firstDutyIds.has(d.id); const pickupForFirst=mins(d.pickup_time); const firstAvailable=isFirstDuty&&(mins(d.start_time)??null)!==null&&pickupForFirst!==null&&first!=null?span((mins(d.start_time)??0)+30,pickupForFirst):null; const firstFeasible=!isFirstDuty||first!=null&&firstAvailable!=null?(!isFirstDuty||first!<=firstAvailable!):false; updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,calculated_return_position_time:calculatedReturnPosition,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:firstFeasible?"CALCULATED":"WARN",route_error:firstFeasible?null:`First position impossible: depot → ${d.origin} needs about ${first??0} min but only ${firstAvailable??0} min is available after the 30-minute vehicle check period.`,first_position_route_minutes:isFirstDuty?(first??null):null,first_position_available_minutes:isFirstDuty?firstAvailable:null,first_position_status:isFirstDuty?(firstFeasible?"PASS":"FAIL"):null,first_position_error:isFirstDuty?(firstFeasible?null:`Depot → ${d.origin} requires about ${first??0} min; available from ${add(d.start_time!,30)} to ${d.pickup_time} is ${firstAvailable??0} min.`):null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null,depot_return_route_minutes:backFinish??null,contract_service_key:inferServiceKey(d,masterServices)});
       }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
     }
     for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
