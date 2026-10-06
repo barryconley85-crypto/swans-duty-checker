@@ -3,9 +3,6 @@ import {minutes,spread,duration,addMinutes,scheduledBreakOpportunities,allocateW
 
 const DOUBLE_MANNED_MAX=1260;
 const SINGLE_MANNED_MAX=900;
-const SCHOOL_SERVICE_PREFIXES=["MGS_","OHGS_","ST_BEDES_"];
-const isSchoolRegularService=(key:string|null)=>Boolean(key&&SCHOOL_SERVICE_PREFIXES.some(p=>key.startsWith(p)));
-function schoolArrivalIssue(d:any){const a=minutes(d.arrival_time);if(a===null)return null;const key=String(d.contract_service_key??"");if(!key.startsWith("MGS_"))return null;if(key==="MGS_CITY_CENTRE"){return a>540?`MGS City Centre Shuttle should reach school by 09:00; planned arrival is ${d.arrival_time}.`:null;}return a>510?`MGS school service should reach school by 08:30; planned arrival is ${d.arrival_time}.`:null;}
 
 function timingErrors(d:any){
   const out:string[]=[];
@@ -50,7 +47,7 @@ export default async function handler(req:any,res:any){
       const maxWorkingDay=isDoubleManned?DOUBLE_MANNED_MAX:SINGLE_MANNED_MAX;
       const groupTimingErrors=rows.flatMap(r=>timingErrors(r).map(x=>({id:r.id,msg:x})));
       const connectionMinutes=rows.slice(0,-1).map(r=>r.connection_minutes??null) as (number|null)[];
-      const dutyTimes=rows.map(r=>({start_time:r.start_time,pickup_time:r.pickup_time,leave_time:r.leave_time,arrival_time:r.arrival_time,finish_time:r.finish_time,back:Boolean(r.back),calculated_return_position_time:r.calculated_return_position_time,origin:r.origin,destination:r.destination,return_route_minutes:r.return_route_minutes??null,depot_return_route_minutes:r.depot_return_route_minutes??null,outbound_route_minutes:r.outbound_route_minutes??null}));
+      const dutyTimes=rows.map(r=>({start_time:r.start_time,pickup_time:r.pickup_time,leave_time:r.leave_time,arrival_time:r.arrival_time,finish_time:r.finish_time,back:Boolean(r.back),calculated_return_position_time:r.calculated_return_position_time,origin:r.origin,destination:r.destination,return_route_minutes:r.return_route_minutes??null,depot_return_route_minutes:r.depot_return_route_minutes??null,first_position_route_minutes:r.first_position_route_minutes??null,outbound_route_minutes:r.outbound_route_minutes??null}));
 
       const isOnHire=String(rows[0]?.driver_name??"").trim().toUpperCase()==="ON HIRE";
       if(isOnHire){for(const d of rows){const issues:string[]=[];if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");else if(d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");if(d.route_status==="WARN"&&d.route_error)issues.push(d.route_error);if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);issues.push("Driver is listed as ON HIRE; driver-hours/WTD compliance cannot be attributed to a named driver.");const overall=d.capacity_status==="FAIL"||d.connection_status==="FAIL"?"FAIL":"WARN";await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:["Driver assignment required before driver-hours compliance can be assessed"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:["Driver assignment required before WTD can be assessed"],break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Driver assignment required before driving-break compliance can be assessed"],issues,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null}).eq("id",d.id);}continue;}
@@ -82,12 +79,11 @@ export default async function handler(req:any,res:any){
       const wtdTotal=wtdAllocated.reduce((s,o)=>s+(o.wtdAllocated??0),0);
       const actualWtdMinutes=wtdWorkingMinutes(daySpread,opportunities,wtdTotal);
       const wtd=wtdTotal>=wtdTarget?"PASS":"FAIL";
-      const operationalDriving=rows.reduce((total,d,i)=>{let n=total+(d.outbound_route_minutes??0);if(i<rows.length-1)n+=d.back?(d.return_route_minutes??0):(d.connection_minutes??0);else n+=d.back?(d.return_route_minutes??0)+(d.depot_return_route_minutes??0):(d.return_route_minutes??0);return n},0);
+      const operationalDriving=rows.reduce((total,d,i)=>{let n=total+(i===0?(d.first_position_route_minutes??0):0)+(d.outbound_route_minutes??0);if(i<rows.length-1)n+=d.back?(d.return_route_minutes??0):(d.connection_minutes??0);else n+=d.back?(d.return_route_minutes??0)+(d.depot_return_route_minutes??0):(d.return_route_minutes??0);return n},0);
       const euPlan=planEuDrivingBreaks(dutyTimes,connectionMinutes);
       const euTotal=euPlan.plans.reduce((s,p)=>s+p.minutes,0);
-      const schoolRegular=rows.every(r=>isSchoolRegularService(r.contract_service_key??null));
       const euTarget=operationalDriving>270?45:0;
-      const euStatus=schoolRegular?"NOT_REQUIRED":euPlan.status==="FAIL"?"FAIL":euTarget===0?"NOT_REQUIRED":euTotal>=euTarget?"PASS":"FAIL";
+      const euStatus=euPlan.status==="FAIL"?"FAIL":euTarget===0?"NOT_REQUIRED":euTotal>=euTarget?"PASS":"FAIL";
       if(hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL")failures++;
 
       for(let i=0;i<rows.length;i++){
@@ -103,15 +99,15 @@ export default async function handler(req:any,res:any){
         if(hours==="FAIL")issues.push(isDoubleManned?"Double-manned working day exceeds the configured 21-hour threshold":"Working day exceeds the configured 15-hour screening threshold");
         if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);
         if(euStatus==="FAIL")issues.push(euPlan.issue??"Insufficient scheduled EU/assimilated driving-break opportunity");
-        const schoolIssue=schoolArrivalIssue(d);if(schoolIssue)issues.push(schoolIssue);
+        const firstPositionIssue=d.first_position_status==="FAIL"?d.first_position_error:null;if(firstPositionIssue)issues.push(firstPositionIssue);
         const routeWarn=d.route_status==="WARN"||d.route_error;
         const connectionWarn=d.connection_status==="WARN";
         const dataQuality=d.capacity_status==="WARN"||routeWarn||connectionWarn?"WARN":"PASS";
-        const overall=d.capacity_status==="FAIL"||hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL"||d.connection_status==="FAIL"||Boolean(schoolIssue)?"FAIL":dataQuality==="WARN"?"WARN":"PASS";
+        const overall=d.capacity_status==="FAIL"||hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL"||d.connection_status==="FAIL"||Boolean(firstPositionIssue)?"FAIL":dataQuality==="WARN"?"WARN":"PASS";
         const hoursIssues=hours==="FAIL"?[isDoubleManned?"Double-manned working day exceeds the configured 21-hour screening threshold":"Working day exceeds the configured 15-hour screening threshold"]:[isDoubleManned?"Double-manned duty identified, 21-hour working-day threshold applied":"15-hour single-manned working-day threshold applied"];
         const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities (WTD working time ${actualWtdMinutes} min)`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
         const plannedEu=euPlan.plans.map(p=>`${p.minutes} min ${p.start}–${p.end}`).join(", ");
-        const euIssues=euStatus==="FAIL"?[euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min is planned from qualifying scheduled opportunities`]:schoolRegular?[`School regular service: GB domestic drivers’ hours profile applied; 4.5-hour assimilated break test is not used as a legal failure screen.`]:[plannedEu?`Planned driving breaks: ${plannedEu}`:`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
+        const euIssues=euStatus==="FAIL"?[euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min is planned from qualifying scheduled opportunities`]:[plannedEu?`Planned driving breaks: ${plannedEu}`:`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
         await db.from("duties").update({
           overall_status:overall,data_quality_status:dataQuality,hours_status:hours,duty_minutes:daySpread,break_minutes:wtdTotal,hours_issues:hoursIssues,
           wtd_status:wtd,wtd_minutes:actualWtdMinutes,wtd_issues:wtdIssues,issues,break_allocations:dutyBreaks,
