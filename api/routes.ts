@@ -14,6 +14,16 @@ const edgeKey=(a:Point,b:Point)=>pointKey(a)+"|"+pointKey(b);
 const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;
 const knownLocationPostcodes:Record<string,string>={
   "Manchester Grammar School":"M13 0XT",
+  "The Manchester Grammar School":"M13 0XT",
+  "Route 2 - The Manchester Grammar School":"M13 0XT",
+  "Hulme Grammar School":"OL8 4BX",
+  "Oldham Hulme Grammar School":"OL8 4BX",
+  "OHLDAM / HULME GRAMMAR":"OL8 4BX",
+  "Radbroke Hall WA16 9EU":"WA16 9EU",
+  "Radbroke Hall":"WA16 9EU",
+  "Barclays Radbroke":"WA16 9EU",
+  "Barclays Technology Centre Radbroke":"WA16 9EU",
+  "Macclesfield College":"SK11 8LF",
   "Savio House, Ingersley Road, Bollington,":"SK10 5RW",
   "ST BEDES AM HALE":"M16 8HX",
   "ST BEDES AM 1":"M16 8HX",
