@@ -15,7 +15,13 @@ const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)
 const knownLocationPostcodes:Record<string,string>={
   "Manchester Grammar School":"M13 0XT",
   "Savio House, Ingersley Road, Bollington,":"SK10 5RW",
-  "ST BEDES AM HALE":"WA15 0DB",
+  "ST BEDES AM 1":"M16 8HX",
+  "ST BEDES AM 2":"M16 8HX",
+  "ST BEDES AM 3":"M16 8HX",
+  "ST BEDES AM 4":"M16 8HX",
+  "ST BEDES AM 5":"M16 8HX",
+  "ST BEDES AM 6":"M16 8HX",
+  "ST BEDES AM 7":"M16 8HX",
   "ST BEDES PM 1":"M16 8HX",
   "ST BEDES PM 2":"M16 8HX",
   "ST BEDES PM 3":"M16 8HX",
@@ -23,6 +29,8 @@ const knownLocationPostcodes:Record<string,string>={
   "ST BEDES PM 5":"M16 8HX",
   "ST BEDES PM 6":"M16 8HX",
   "ST BEDES PM 7":"M16 8HX",
+  "ST BEDES AM":"M16 8HX",
+  "ST BEDES PM":"M16 8HX",
   "Altrincham School Bus.":"WA14 1EN",
   "Altrincham PM":"WA14 1EN"
 };
