@@ -16,6 +16,13 @@ const knownLocationPostcodes:Record<string,string>={
   "Manchester Grammar School":"M13 0XT",
   "Savio House, Ingersley Road, Bollington,":"SK10 5RW",
   "ST BEDES AM HALE":"WA15 0DB",
+  "ST BEDES PM 1":"M16 8HX",
+  "ST BEDES PM 2":"M16 8HX",
+  "ST BEDES PM 3":"M16 8HX",
+  "ST BEDES PM 4":"M16 8HX",
+  "ST BEDES PM 5":"M16 8HX",
+  "ST BEDES PM 6":"M16 8HX",
+  "ST BEDES PM 7":"M16 8HX",
   "Altrincham School Bus.":"WA14 1EN",
   "Altrincham PM":"WA14 1EN"
 };
