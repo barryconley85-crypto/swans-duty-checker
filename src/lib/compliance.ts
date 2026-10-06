@@ -1,8 +1,9 @@
-export const minutes=(v:string|null)=>{const m=v?.match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
+export const minutes=(v:string|null)=>{const m=v?.match(/^(\\d{2}):(\\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
 export const duration=(a:string|null,b:string|null)=>{const x=minutes(a),y=minutes(b);return x===null||y===null?null:y>=x?y-x:y+1440-x};
 export const spread=(start:number,end:number)=>end>=start?end-start:end+1440-start;
+export const addMinutes=(v:string,n:number)=>{const base=minutes(v);if(base===null)throw Error("Cannot calculate from missing time");const x=((base+n)%1440+1440)%1440;return String(Math.floor(x/60)).padStart(2,"0")+":"+String(x%60).padStart(2,"0")};
 export const screenWorkingDay=(minutesWorked:number)=>minutesWorked>900?"FAIL":"PASS";
-export const screenWtdBreak=(spreadMinutes:number,breakMinutes:number)=>spreadMinutes>360&&breakMinutes<30?"FAIL":"PASS";
+export const screenWtdBreak=(spreadMinutes:number,breakMinutes:number)=>spreadMinutes>540?breakMinutes<45?"FAIL":"PASS":spreadMinutes>360?breakMinutes<30?"FAIL":"PASS":"PASS";
 
 export type DutyTimes={
   start_time:string|null;
@@ -10,6 +11,18 @@ export type DutyTimes={
   leave_time:string|null;
   arrival_time:string|null;
   finish_time:string|null;
+  back?:boolean;
+  calculated_return_position_time?:string|null;
+  origin?:string|null;
+  destination?:string|null;
+};
+
+export type BreakOpportunity={
+  start:string;
+  end:string;
+  minutes:number;
+  source:"passenger_layover"|"between_jobs";
+  description:string;
 };
 
 export const passengerStart=(d:DutyTimes)=>d.pickup_time;
@@ -26,19 +39,65 @@ export const scheduledDutySegments=(rows:DutyTimes[])=>{
   return segments;
 };
 
-export const scheduledBreakMinutes=(rows:DutyTimes[],connectionMinutes:(number|null)[]=[]):number=>{
-  let breaks=0;
+export const scheduledBreakOpportunities=(rows:DutyTimes[],connectionMinutes:(number|null)[]=[]):BreakOpportunity[]=>{
+  const opportunities:BreakOpportunity[]=[];
   rows.forEach((d,i)=>{
-    const arrival=minutes(d.arrival_time),leave=minutes(d.leave_time);
-    if(arrival!==null&&leave!==null)breaks+=duration(d.arrival_time,d.leave_time)??0;
+    const layover=duration(d.arrival_time,d.leave_time);
+    if(layover!==null&&layover>=15)opportunities.push({
+      start:d.arrival_time!,
+      end:d.leave_time!,
+      minutes:layover,
+      source:"passenger_layover",
+      description:`Passenger journey complete at ${d.destination??"destination"} — scheduled layover before Leave`
+    });
     if(i<rows.length-1){
-      const a=minutes(d.leave_time),b=minutes(rows[i+1].pickup_time);
-      if(a!==null&&b!==null){
-        const available=spread(a,b);
-        const route=connectionMinutes[i];
-        if(route!=null)breaks+=Math.max(0,available-route);
+      const endTime=d.back&&d.calculated_return_position_time?d.calculated_return_position_time:d.leave_time;
+      const next=rows[i+1];
+      const available=duration(endTime,next.pickup_time);
+      const route=connectionMinutes[i];
+      if(endTime&&next.pickup_time&&available!==null&&route!==null){
+        const breakMinutes=Math.max(0,available-route);
+        if(breakMinutes>=15)opportunities.push({
+          start:addMinutes(endTime,route),
+          end:next.pickup_time!,
+          minutes:breakMinutes,
+          source:"between_jobs",
+          description:`Between jobs: arrive at ${next.origin??"next position"} after estimated ${route} min reposition`
+        });
       }
     }
   });
-  return breaks;
+  return opportunities.sort((a,b)=>(minutes(a.start)??0)-(minutes(b.start)??0));
+};
+
+export const allocateWtdBreaks=(opportunities:BreakOpportunity[],target:number)=>{
+  let remaining=target;
+  return opportunities.map(o=>{
+    if(remaining<=0||o.minutes<15)return {...o,wtdAllocated:0};
+    const allocated=Math.min(remaining,o.minutes);
+    remaining-=allocated;
+    return {...o,wtdAllocated:allocated};
+  });
+};
+
+export const allocateEuBreaks=(opportunities:BreakOpportunity[],target:number)=>{
+  let remaining=target;
+  const out=opportunities.map(o=>({...o,euAllocated:0}));
+  if(target<=0)return out;
+  const full=out.findIndex(o=>o.minutes>=45);
+  if(full>=0){
+    out[full].euAllocated=45;
+    return out;
+  }
+  const first=out.findIndex(o=>o.minutes>=15);
+  if(first<0)return out;
+  out[first].euAllocated=15;
+  remaining-=15;
+  const second=out.findIndex((o,i)=>i>first&&o.minutes>=30);
+  if(second>=0)out[second].euAllocated=Math.min(30,remaining);
+  return out;
+};
+
+export const scheduledBreakMinutes=(rows:DutyTimes[],connectionMinutes:(number|null)[]=[]):number=>{
+  return scheduledBreakOpportunities(rows,connectionMinutes).reduce((sum,o)=>sum+o.minutes,0);
 };
