@@ -51,12 +51,14 @@ export default async function handler(req:any,res:any){
         return_route_minutes:r.return_route_minutes??null,depot_return_route_minutes:r.depot_return_route_minutes??null
       }));
       const opportunities=scheduledBreakOpportunities(dutyTimes,connectionMinutes);
+      // Establish WTD working time before allocating the required WTD break.
+      // Genuine split-duty gaps over 3 hours are excluded first.
       const preliminaryWtdMinutes=wtdWorkingMinutes(daySpread,opportunities,0);
       const wtdTarget=preliminaryWtdMinutes>540?45:preliminaryWtdMinutes>360?30:0;
       const wtdAllocated=allocateWtdBreaks(opportunities,wtdTarget);
       const wtdTotal=wtdAllocated.reduce((s,o)=>s+(o.wtdAllocated??0),0);
       const actualWtdMinutes=wtdWorkingMinutes(daySpread,opportunities,wtdTotal);
-      const wtd=screenWtdBreak(actualWtdMinutes,wtdTotal);
+      const wtd=wtdTotal>=wtdTarget?"PASS":"FAIL";
 
       const operationalDriving=rows.reduce((total,d,i)=>{
         let n=total+(d.outbound_route_minutes??0);
