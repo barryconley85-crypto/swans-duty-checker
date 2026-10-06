@@ -142,12 +142,12 @@ export default async function handler(req:any,res:any){
       try{
         const outbound=routeTimes.get(e.outbound),ret=d.back?routeTimes.get(e.backReturn!):routeTimes.get(e.ret),backFinish=e.backFinish?routeTimes.get(e.backFinish):null;
         const arrivalWasMissing=!d.arrival_time,finishWasMissing=!d.finish_time;
-        let arrival=d.arrival_time,returnArrival=d.return_arrival_time,returnArrivalEstimated=Boolean(d.return_arrival_estimated),finish=d.finish_time;
+        let arrival=d.arrival_time,returnArrival=d.return_arrival_time,calculatedReturnPosition=d.calculated_return_position_time,finish=d.finish_time;
         if(!arrival){if(outbound==null)throw Error("No outbound route could be calculated");if(!d.leave_time)throw Error("Missing Leave time");arrival=add(d.leave_time,outbound);reconstructed++}
-        if(d.back){const returnLeave=d.return_leave_time??d.leave_time;if(!returnLeave)throw Error("Missing return departure time");if(ret==null)throw Error("No return passenger route could be calculated");returnArrival=add(returnLeave,ret);returnArrivalEstimated=true;reconstructed++}
-        if(!finish){if(d.back){if(!returnArrival)throw Error("Missing return arrival time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(returnArrival,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");if(!d.leave_time)throw Error("Missing Leave time for depot return");finish=add(d.leave_time,ret);reconstructed++}}
+        if(d.back){const returnLeave=d.return_leave_time??d.leave_time;if(!returnLeave)throw Error("Missing return departure time");if(ret==null)throw Error("No return passenger route could be calculated");calculatedReturnPosition=add(returnLeave,ret);reconstructed++}
+        if(!finish){if(d.back){if(!calculatedReturnPosition)throw Error("Missing calculated return position time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(calculatedReturnPosition,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");if(!d.leave_time)throw Error("Missing Leave time for depot return");finish=add(d.leave_time,ret);reconstructed++}}
         d.arrival_time=arrival;d.return_arrival_time=returnArrival;d.finish_time=finish;
-        updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,return_arrival_estimated:returnArrivalEstimated,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
+        updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,calculated_return_position_time:calculatedReturnPosition,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:"CALCULATED",route_error:null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null});
       }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
     }
     for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
@@ -158,11 +158,11 @@ export default async function handler(req:any,res:any){
       group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
         const prev=group[i],next=group[i+1];
-        const previousEndLocation=prev.back&&prev.return_arrival_time?prev.origin:prev.destination;
+        const previousEndLocation=prev.back&&prev.calculated_return_position_time?prev.origin:prev.destination;
         // Operational chaining ends when the passenger journey is complete.
         // Contractual Start/Finish times are duty-time markers, not school-to-school movement constraints.
-        const previousEndTime=prev.back&&prev.return_arrival_time
-          ? prev.return_arrival_time
+        const previousEndTime=prev.back&&prev.calculated_return_position_time
+          ? prev.calculated_return_position_time
           : prev.leave_time;
         if(!selectedIds.has(next.id)||!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
         const a=points.get(previousEndLocation),b=points.get(next.origin);if(!a||!b)continue;
