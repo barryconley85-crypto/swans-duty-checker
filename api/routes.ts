@@ -174,10 +174,10 @@ export default async function handler(req:any,res:any){
       group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
         const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);
-        const previousEndLocation=prev.back&&prev.return_arrival_time?prev.origin:prev.destination;
+        const previousEndLocation=prev.back&&prev.calculated_return_position_time?prev.origin:prev.destination;
         // Use passenger journey completion/Leave, never the contractual depot Finish.
-        const previousEndTime=prev.back&&prev.return_arrival_time
-          ? prev.return_arrival_time
+        const previousEndTime=prev.back&&prev.calculated_return_position_time
+          ? prev.calculated_return_position_time
           : prev.leave_time;
         if(!selectedIds.has(next.id)||!k||!previousEndTime||!next.pickup_time)continue;
         connectionsChecked++;const required=routeTimes.get(k);
