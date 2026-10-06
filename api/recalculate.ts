@@ -1,5 +1,5 @@
 import {createClient} from "@supabase/supabase-js";
-import {minutes,spread,duration,addMinutes,screenWorkingDay,screenWtdBreak,scheduledBreakOpportunities,allocateWtdBreaks,allocateEuBreaks} from "../src/lib/compliance.js";
+import {minutes,spread,duration,addMinutes,screenWorkingDay,screenWtdBreak,scheduledBreakOpportunities,allocateWtdBreaks,allocateEuBreaks,planEuDrivingBreaks} from "../src/lib/compliance.js";
 
 export default async function handler(req:any,res:any){
   try{
@@ -47,10 +47,11 @@ export default async function handler(req:any,res:any){
         }
         return n;
       },0);
+      const euPlan=planEuDrivingBreaks(dutyTimes,connectionMinutes);
       const euTarget=operationalDriving>270?45:0;
       const euAllocated=allocateEuBreaks(opportunities,euTarget);
       const euTotal=euAllocated.reduce((s,o)=>s+(o.euAllocated??0),0);
-      const euStatus=euTarget===0?"NOT_REQUIRED":euTotal>=euTarget?"PASS":"FAIL";
+      const euStatus=euPlan.status==="FAIL"?"FAIL":euTarget===0?"NOT_REQUIRED":euTotal>=euTarget?"PASS":"FAIL";
 
       if(hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL")failures++;
 
@@ -70,7 +71,7 @@ export default async function handler(req:any,res:any){
         const overall=d.capacity_status==="FAIL"||hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL"||d.connection_status==="FAIL"?"FAIL":d.capacity_status==="WARN"?"WARN":"PASS";
         const hoursIssues=hours==="FAIL"?["Working day exceeds the configured 15-hour screening threshold"]:[];
         const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
-        const euIssues=euStatus==="FAIL"?[`Need 45 min EU/assimilated break; only ${euTotal} min can be allocated from qualifying scheduled opportunities`]:[`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
+        const euIssues=euStatus==="FAIL"?[(euPlan.issue??`Need 45 min EU/assimilated break; only ${euTotal} min can be allocated from qualifying scheduled opportunities`)]:[`EU/assimilated break allocated: ${euTotal}/${euTarget} min`];
         await db.from("duties").update({
           overall_status:overall,
           hours_status:hours,
@@ -86,6 +87,7 @@ export default async function handler(req:any,res:any){
           eu_break_allocated_minutes:euTotal,
           eu_break_status:euStatus,
           eu_break_issues:euIssues,
+          eu_driving_plan:euPlan.plans,
           calculated_next_arrival_time:calculatedNextArrivalTime,
           calculated_position_travel_minutes:nextTravel,
           calculated_position_available_minutes:calculatedPositionAvailableMinutes
