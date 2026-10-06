@@ -15,6 +15,7 @@ const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)
 const knownLocationPostcodes:Record<string,string>={
   "Manchester Grammar School":"M13 0XT",
   "Savio House, Ingersley Road, Bollington,":"SK10 5RW",
+  "ST BEDES AM HALE":"M16 8HX",
   "ST BEDES AM 1":"M16 8HX",
   "ST BEDES AM 2":"M16 8HX",
   "ST BEDES AM 3":"M16 8HX",
