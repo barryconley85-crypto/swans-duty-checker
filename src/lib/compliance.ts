@@ -1,4 +1,4 @@
-export const minutes=(v:string|null)=>{const m=v?.match(/^(\\d{2}):(\\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
+export const minutes=(v:string|null)=>{const m=v?.match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
 export const duration=(a:string|null,b:string|null)=>{const x=minutes(a),y=minutes(b);return x===null||y===null?null:y>=x?y-x:y+1440-x};
 export const spread=(start:number,end:number)=>end>=start?end-start:end+1440-start;
 export const addMinutes=(v:string,n:number)=>{const base=minutes(v);if(base===null)throw Error("Cannot calculate from missing time");const x=((base+n)%1440+1440)%1440;return String(Math.floor(x/60)).padStart(2,"0")+":"+String(x%60).padStart(2,"0")};
