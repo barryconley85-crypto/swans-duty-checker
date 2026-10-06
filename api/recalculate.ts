@@ -56,7 +56,7 @@ export default async function handler(req:any,res:any){
 
       for(let i=0;i<rows.length;i++){
         const d=rows[i];
-        const dutyBreaks=opportunities.map((o,idx)=>({...o,wtdAllocated:wtdAllocated[idx]?.wtdAllocated??0,euAllocated:euAllocated[idx]?.euAllocated??0})).filter(o=>o.wtdAllocated>0||o.euAllocated>0||o.source==="between_jobs"&&o.minutes>=15);
+        const dutyBreaks=opportunities.map((o,idx)=>({...o,wtdAllocated:wtdAllocated[idx]?.wtdAllocated??0,euAllocated:euAllocated[idx]?.euAllocated??0})).filter(o=>o.dutyIndex===i&&(o.wtdAllocated>0||o.euAllocated>0||o.source==="between_jobs"&&o.minutes>=15));
         const next=rows[i+1];
         const previousEndTime=d.back&&d.calculated_return_position_time?d.calculated_return_position_time:d.leave_time;
         const nextTravel=d.connection_minutes??null;
