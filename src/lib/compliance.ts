@@ -57,31 +57,66 @@ export type EuDrivingPlan={start:string;end:string;minutes:15|30|45;description:
 
 export const planEuDrivingBreaks=(rows:DutyTimes[],connectionMinutes:(number|null)[]=[]):{plans:EuDrivingPlan[];drivingMinutes:number;status:"PASS"|"FAIL";issue:string|null}=>{
   const opportunities=scheduledBreakOpportunities(rows,connectionMinutes).filter(o=>o.minutes>=15);
-  const plans:EuDrivingPlan[]=[]; let continuousDriving=0,totalDriving=0,firstSplitUsed=false,oppIndex=0;
-  const segments:{minutes:number}[]=[];
-  rows.forEach((d,i)=>{
-    const passenger=duration(d.pickup_time,d.arrival_time);
-    if(passenger!=null)segments.push({minutes:passenger});
-    if(d.back&&d.return_route_minutes!=null)segments.push({minutes:d.return_route_minutes});
-    if(i<rows.length-1&&connectionMinutes[i]!=null)segments.push({minutes:connectionMinutes[i]!});
-    if(i===rows.length-1&&!d.back&&d.return_route_minutes!=null)segments.push({minutes:d.return_route_minutes});
-    if(i===rows.length-1&&d.back&&d.depot_return_route_minutes!=null)segments.push({minutes:d.depot_return_route_minutes});
-  });
-  for(const seg of segments){
-    let remaining=seg.minutes;
+  const byKey=new Map(opportunities.map(o=>[`${o.start}|${o.end}|${o.dutyIndex}`,o]));
+  const plans:EuDrivingPlan[]=[];
+  let continuousDriving=0,totalDriving=0,firstSplitUsed=false;
+
+  const drive=(minutesToAdd:number)=>{
+    let remaining=minutesToAdd;
     while(remaining>0){
-      const next=opportunities[oppIndex];
-      if(next){
-        if(next.minutes>=45&&continuousDriving>=225){plans.push({start:next.start,end:next.end,minutes:45,description:"Planned full 45-minute EU driving break"});continuousDriving=0;firstSplitUsed=false;oppIndex++;continue;}
-        if(next.minutes>=15&&!firstSplitUsed&&continuousDriving>=225){plans.push({start:next.start,end:next.end,minutes:15,description:"Planned first 15 minutes of split EU driving break"});firstSplitUsed=true;oppIndex++;continue;}
-        if(next.minutes>=30&&firstSplitUsed){plans.push({start:next.start,end:next.end,minutes:30,description:"Planned second 30 minutes of split EU driving break"});continuousDriving=0;firstSplitUsed=false;oppIndex++;continue;}
-      }
-      const room=270-continuousDriving; const take=Math.min(remaining,room); continuousDriving+=take; totalDriving+=take; remaining-=take;
-      if(continuousDriving>=270&&remaining>0)return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver reaches 4.5 hours driving before a qualifying break can be completed."};
+      const room=270-continuousDriving;
+      const take=Math.min(remaining,room);
+      continuousDriving+=take;
+      totalDriving+=take;
+      remaining-=take;
+      if(continuousDriving>=270&&remaining>0)return false;
+    }
+    return true;
+  };
+
+  const useOpportunity=(o:BreakOpportunity)=>{
+    if(o.minutes>=45&&continuousDriving>0){
+      plans.push({start:o.start,end:o.end,minutes:45,description:"Planned full 45-minute EU driving break"});
+      continuousDriving=0;
+      firstSplitUsed=false;
+      return;
+    }
+    if(o.minutes>=15&&!firstSplitUsed&&continuousDriving>0){
+      plans.push({start:o.start,end:o.end,minutes:15,description:"Planned first 15 minutes of split EU driving break"});
+      firstSplitUsed=true;
+      return;
+    }
+    if(o.minutes>=30&&firstSplitUsed){
+      plans.push({start:o.start,end:o.end,minutes:30,description:"Planned second 30 minutes of split EU driving break"});
+      continuousDriving=0;
+      firstSplitUsed=false;
+    }
+  };
+
+  for(let i=0;i<rows.length;i++){
+    const d=rows[i];
+    const passenger=duration(d.pickup_time,d.arrival_time);
+    if(passenger!=null&&!drive(passenger))return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver reaches 4.5 hours driving before a qualifying break can be completed."};
+
+    const passengerBreak=opportunities.find(o=>o.dutyIndex===i&&o.source==="passenger_layover");
+    if(passengerBreak)useOpportunity(passengerBreak);
+
+    if(d.back&&d.return_route_minutes!=null&&!drive(d.return_route_minutes))
+      return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver reaches 4.5 hours driving before a qualifying break can be completed."};
+
+    if(i<rows.length-1&&connectionMinutes[i]!=null){
+      if(!drive(connectionMinutes[i]!))return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver reaches 4.5 hours driving before a qualifying break can be completed."};
+      const between=opportunities.find(o=>o.dutyIndex===i&&o.source==="between_jobs");
+      if(between)useOpportunity(between);
+    }else if(i===rows.length-1){
+      if(!d.back&&d.return_route_minutes!=null&&!drive(d.return_route_minutes))
+        return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver reaches 4.5 hours driving before a qualifying break can be completed."};
+      if(d.back&&d.depot_return_route_minutes!=null&&!drive(d.depot_return_route_minutes))
+        return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"Driver reaches 4.5 hours driving before a qualifying break can be completed."};
     }
   }
+
   if(firstSplitUsed)return {plans,drivingMinutes:totalDriving,status:"FAIL",issue:"A 15-minute first split break is planned but no later 30-minute second part is available."};
   return {plans,drivingMinutes:totalDriving,status:"PASS",issue:null};
 };
-
 export const scheduledBreakMinutes=(rows:DutyTimes[],connectionMinutes:(number|null)[]=[]):number=>scheduledBreakOpportunities(rows,connectionMinutes).reduce((sum,o)=>sum+o.minutes,0);
