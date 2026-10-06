@@ -166,6 +166,24 @@ export default async function handler(req:any,res:any){
     for(const d of workRows)if(d.driver_name){const a=groups.get(d.driver_name)??[];a.push(d);groups.set(d.driver_name,a)}
     const edgeMap=new Map<string,Edge>(),dutyEdges=new Map<string,{outbound:string,ret:string,backReturn?:string,backFinish?:string}>();
     for(const d of selectedRows){
+      // Clear derived connection results before every route run so changed contract mappings cannot leave stale PASS/FAIL data behind.
+      await db.from("duties").update({
+        connection_status:"NOT_CHECKED",connection_error:null,connection_minutes:null,connection_available_minutes:null,
+        calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null
+      }).eq("id",d.id);
+      const pickupM=mins(d.pickup_time),leaveM=mins(d.leave_time),arrivalM=mins(d.arrival_time);
+      if(arrivalM!==null&&leaveM!==null&&leaveM<arrivalM){
+        await db.from("duties").update({
+          route_status:"WARN",route_error:`Invalid source timing: Leave ${d.leave_time} is before Arrival ${d.arrival_time}; waiting/rest cannot be calculated.`
+        }).eq("id",d.id);
+        continue;
+      }
+      if(pickupM!==null&&arrivalM!==null&&arrivalM<pickupM){
+        await db.from("duties").update({
+          route_status:"WARN",route_error:`Invalid source timing: Arrival ${d.arrival_time} is before Pickup ${d.pickup_time}.`
+        }).eq("id",d.id);
+        continue;
+      }
       const a=d.origin?points.get(d.origin):null,b=d.destination?points.get(d.destination):null;if(!a||!b)continue;
       const out=edgeKey(a,b),ret=edgeKey(b,points.get(depot)!);edgeMap.set(out,{key:out,from:a,to:b});edgeMap.set(ret,{key:ret,from:b,to:points.get(depot)!});let backReturn:string|undefined,backFinish:string|undefined;if(d.back){backReturn=edgeKey(b,a);backFinish=edgeKey(a,points.get(depot)!);edgeMap.set(backReturn,{key:backReturn,from:b,to:a});edgeMap.set(backFinish,{key:backFinish,from:a,to:points.get(depot)!});}dutyEdges.set(d.id,{outbound:out,ret,backReturn,backFinish});
     }
