@@ -1,5 +1,5 @@
 import {createClient} from "@supabase/supabase-js";
-import {minutes,spread,duration,addMinutes,screenWtdBreak,scheduledBreakOpportunities,allocateWtdBreaks,planEuDrivingBreaks,wtdWorkingMinutes} from "../src/lib/compliance.js";
+import {minutes,spread,duration,addMinutes,scheduledBreakOpportunities,allocateWtdBreaks,planEuDrivingBreaks,wtdWorkingMinutes} from "../src/lib/compliance.js";
 
 const DOUBLE_MANNED_MAX=1260;
 const SINGLE_MANNED_MAX=900;
