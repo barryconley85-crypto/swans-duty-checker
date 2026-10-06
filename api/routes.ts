@@ -178,7 +178,7 @@ export default async function handler(req:any,res:any){
         // Use passenger journey completion/arrival, never the contractual depot Finish or departure time.
         const previousEndTime=prev.back&&prev.calculated_return_position_time
           ? prev.calculated_return_position_time
-          : prev.leave_time;
+          : prev.arrival_time;
         if(!selectedIds.has(next.id)||!k||!previousEndTime||!next.pickup_time)continue;
         connectionsChecked++;const required=routeTimes.get(k);
         if(required==null){warnings++;await db.from("duties").update({connection_status:"WARN",connection_error:"Could not calculate school-to-school connection time"}).eq("id",next.id);continue}
