@@ -12,7 +12,7 @@ const add=(v:string,n:number)=>{const base=mins(v);if(base===null)throw Error("C
 const pointKey=(p:Point)=>p.map(v=>v.toFixed(6)).join(",");
 const edgeKey=(a:Point,b:Point)=>pointKey(a)+"|"+pointKey(b);
 const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;
-const isOperationalLabel=(q:string)=>/^(WORSLEY ROUTE(?: - MGS)?|ROUTE [12] - |ST BEDES (?:AM|PM)|OHGS - |COACH \d|4 X PICK UPS|CLEANING(?: AT SWANS)?|STANDBY\b|WORK DAY|HOLIDAY|SICK|REST DAY)/i.test(String(q).trim());
+const isOperationalLabel=(q:string)=>/^(WORSLEY ROUTE(?: - MGS)?|ALTRINCHAM SHUTTLE BUS|ROUTE [12] - |ST BEDES (?:AM|PM)|OHGS - |COACH \d|4 X PICK UPS|CLEANING(?: AT SWANS)?|STANDBY\b|WORK DAY|HOLIDAY|SICK|REST DAY)/i.test(String(q).trim());
 const knownLocationPostcodes:Record<string,string>={
   "Manchester Grammar School":"M13 0XT",
   "The Manchester Grammar School":"M13 0XT",
@@ -25,6 +25,8 @@ const knownLocationPostcodes:Record<string,string>={
   "Barclays Radbroke":"WA16 9EU",
   "Barclays Technology Centre Radbroke":"WA16 9EU",
   "Macclesfield College":"SK11 8LF",
+  "Rochdale AFC":"OL11 5DR",
+  "Huddersfield Town AFC":"HD1 6PX",
   "Savio House, Ingersley Road, Bollington,":"SK10 5RW",
   "ST BEDES AM HALE":"M16 8HX",
   "ST BEDES AM 1":"M16 8HX",
