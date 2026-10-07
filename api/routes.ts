@@ -119,24 +119,25 @@ async function matrixBatch(edges:Edge[]){
 async function routeEdges(edges:Edge[]){
   const out=new Map<string,number>(),batches:Edge[][]=[];
   for(let i=0;i<edges.length;i+=20)batches.push(edges.slice(i,i+20));
-  for(let i=0;i<batches.length;i+=4){
-    const results=await Promise.all(batches.slice(i,i+4).map(async batch=>{
+  for(let i=0;i<batches.length;i+=2){
+    const results=await Promise.all(batches.slice(i,i+2).map(async batch=>{
       try{return await matrixBatch(batch)}catch{
         const vals=await Promise.all(batch.map(async e=>{
-          const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false";
-          const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-          if(!r.ok)throw Error("Routing failed "+r.status);
-          const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)throw Error("No route returned");
-          return [e.key,Math.ceil(Number(d)/60)] as const;
+          try{
+            const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false";
+            const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+            if(!r.ok)return null;
+            const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)return null;
+            return [e.key,Math.ceil(Number(d)/60)] as const;
+          }catch{return null;}
         }));
-        return new Map(vals);
+        return new Map(vals.filter((v):v is [string,number]=>v!==null));
       }
     }));
     for(const m of results)for(const [k,v] of m)out.set(k,v);
   }
   return out;
 }
-
 export default async function handler(req:any,res:any){
   try{
     if(req.method!=="POST")return res.status(405).json({error:"POST required"});
