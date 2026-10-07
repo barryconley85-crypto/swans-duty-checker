@@ -23,3 +23,15 @@ jobs:
             -X POST "https://swans-duty-checker.vercel.app/api/routes" \
             -H "Content-Type: application/json" \
             --data '{"importId":"ZQoVu9Y1T4rolnfLz3gav","offset":${{ matrix.offset }},"limit":40}'
+
+  recalculate:
+    needs: route
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recalculate compliance
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 5 \
+            -X POST "https://swans-duty-checker.vercel.app/api/recalculate" \
+            -H "Content-Type: application/json" \
+            --data '{"importId":"ZQoVu9Y1T4rolnfLz3gav"}'
