@@ -1,0 +1,24 @@
+name: Temporary Duty Route Reconstruction
+
+on:
+  push:
+    paths:
+      - ".github/workflows/run-route-reconstruction.yml"
+
+jobs:
+  route:
+    if: github.event.head_commit.message == 'Run full duty route reconstruction'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        offset: [0, 40, 80, 120, 160]
+    steps:
+      - name: Route duty batch
+        run: |
+          echo "Routing duties offset=${{ matrix.offset }}"
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 5 \
+            -X POST "https://swans-duty-checker.vercel.app/api/routes" \
+            -H "Content-Type: application/json" \
+            --data '{"importId":"ZQoVu9Y1T4rolnfLz3gav","offset":${{ matrix.offset }},"limit":40}'
