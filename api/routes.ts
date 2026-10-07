@@ -76,35 +76,31 @@ async function geocodeMany(locations:string[],key?:string,master:Record<string,s
     const p=postcodeMap.get(depotPostcode);if(p)result.set(depot,p);
   }
 
+  // Only geocode genuine physical locations here. Service/timetable labels must be
+  // mapped to a real first/last stop instead of being guessed by a place-name search.
   const remaining=locations.filter(q=>!result.has(q)&&!isOperationalLabel(q));
-  const geoBatches:string[][]=[];for(let i=0;i<remaining.length;i+=5)geoBatches.push(remaining.slice(i,i+5));
-  for(let i=0;i<geoBatches.length;i+=3){
-    const chunk=geoBatches.slice(i,i+3);
-    const all=await Promise.all(chunk.map(batch=>Promise.allSettled(batch.map(async q=>{
-      if(key){
-        const u=new URL("https://api.heigit.org/pelias/v1/search");
-        u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
-        const r=await fetch(u,{headers:{Authorization:key}});
-        if(r.ok){const j:any=await r.json();const c=j.features?.[0]?.geometry?.coordinates;if(c)return [q,[Number(c[0]),Number(c[1])] as Point] as const;}
-      }
-      const clean=q.replace(/\\b(AM|PM|RUN\\d+)\\b/gi,"").replace(/[*]/g,"").trim();
-      const photon=new URL("https://photon.komoot.io/api/");
-      photon.searchParams.set("q",clean);photon.searchParams.set("limit","1");photon.searchParams.set("countrycode","GB");
-      const pr=await fetch(photon,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-      if(pr.ok){const pj:any=await pr.json();const pc=pj.features?.[0]?.geometry?.coordinates;if(pc)return [q,[Number(pc[0]),Number(pc[1])] as Point] as const;}
-      const u=new URL("https://nominatim.openstreetmap.org/search");
-      u.searchParams.set("q",clean+" UK");u.searchParams.set("format","json");u.searchParams.set("limit","1");
-      const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-      if(!r.ok)throw Error("Geocode failed "+r.status);
-      const j:any=await r.json();if(!j[0])throw Error("Location could not be geocoded: "+q);
-      return [q,[Number(j[0].lon),Number(j[0].lat)] as Point] as const;
-    }))));
-    for(const vals of all)for(const v of vals)if(v.status==="fulfilled")result.set(v.value[0],v.value[1]);
+  for(let i=0;i<remaining.length;i+=3){
+    const batch=remaining.slice(i,i+3);
+    const vals=await Promise.all(batch.map(async q=>{
+      try{
+        if(key){
+          const u=new URL("https://api.heigit.org/pelias/v1/search");
+          u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
+          const r=await fetch(u,{headers:{Authorization:key}});
+          if(r.ok){const j:any=await r.json();const c=j.features?.[0]?.geometry?.coordinates;if(c)return [q,[Number(c[0]),Number(c[1])] as Point] as const;}
+        }
+        const clean=q.replace(/\b(AM|PM|RUN\d+)\b/gi,"").replace(/[*]/g,"").trim();
+        const photon=new URL("https://photon.komoot.io/api/");
+        photon.searchParams.set("q",clean);photon.searchParams.set("limit","1");photon.searchParams.set("countrycode","GB");
+        const pr=await fetch(photon,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+        if(pr.ok){const pj:any=await pr.json();const pc=pj.features?.[0]?.geometry?.coordinates;if(pc)return [q,[Number(pc[0]),Number(pc[1])] as Point] as const;}
+      }catch{}
+      return null;
+    }));
+    for(const v of vals)if(v)result.set(v[0],v[1]);
   }
-  if(!result.has(depot))throw Error("Depot postcode could not be geocoded: "+depotPostcode);
   return result;
 }
-
 async function matrixBatch(edges:Edge[]){
   const points:Point[]=[];const index=new Map<string,number>();
   const idx=(p:Point)=>{const k=pointKey(p);const old=index.get(k);if(old!==undefined)return old;const i=points.length;points.push(p);index.set(k,i);return i};
@@ -192,7 +188,7 @@ export default async function handler(req:any,res:any){
         }).eq("id",d.id);
         continue;
       }
-      const a=d.origin?points.get(d.origin):null,b=d.destination?points.get(d.destination):null;if(!a||!b)continue;
+      const a=d.origin?points.get(d.origin):null,b=d.destination?points.get(d.destination):null;if(!a||!b){const missing=[!a?d.origin:null,!b?d.destination:null].filter(Boolean).join(" / ");await db.from("duties").update({route_status:"WARN",route_error:`Physical route point unresolved: ${missing}. A service label cannot be used as a physical address.`}).eq("id",d.id);continue;}
       const out=edgeKey(a,b),first=edgeKey(points.get(depot)!,a),ret=edgeKey(b,points.get(depot)!);edgeMap.set(first,{key:first,from:points.get(depot)!,to:a});edgeMap.set(out,{key:out,from:a,to:b});edgeMap.set(ret,{key:ret,from:b,to:points.get(depot)!});let backReturn:string|undefined,backFinish:string|undefined;if(d.back){backReturn=edgeKey(b,a);backFinish=edgeKey(a,points.get(depot)!);edgeMap.set(backReturn,{key:backReturn,from:b,to:a});edgeMap.set(backFinish,{key:backFinish,from:a,to:points.get(depot)!});}dutyEdges.set(d.id,{first,outbound:out,ret,backReturn,backFinish});
     }
     let connectionEdges=new Map<string,string>();
