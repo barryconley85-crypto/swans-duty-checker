@@ -219,6 +219,5 @@ export default async function handler(req:any,res:any){
     // duty routing pass. This keeps one slow school-to-school movement from
     // blocking the physical route calculations for the whole batch.
     return res.json({importId,processed:selectedRows.length,nextOffset:offset+selectedRows.length<allRows.length?offset+selectedRows.length:null,reconstructed,warnings,connectionsChecked:0,connectionFailures:0,routingProvider:"Postcodes.io + Photon + OSRM"});
-({importId,processed:selectedRows.length,nextOffset:offset+selectedRows.length<allRows.length?offset+selectedRows.length:null,reconstructed,warnings,connectionsChecked,connectionFailures,routingProvider:"Postcodes.io + Photon/Nominatim + OSRM matrix"});
   }catch(e){return res.status(400).json({error:e instanceof Error?e.message:"Route reconstruction failed"})}
 }
