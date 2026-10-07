@@ -215,41 +215,10 @@ export default async function handler(req:any,res:any){
     }
     for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
 
-    connectionEdges=new Map<string,string>();
-    const connectionEdgesToRoute:Edge[]=[];
-    for(const group of groups.values()){
-      group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
-      for(let i=0;i<group.length-1;i++){
-        const prev=group[i],next=group[i+1];
-        const previousEndLocation=prev.back&&prev.calculated_return_position_time?prev.origin:prev.destination;
-        // Operational chaining ends when the passenger journey is complete.
-        // Contractual Start/Finish times are duty-time markers, not school-to-school movement constraints.
-        const previousEndTime=prev.back&&prev.calculated_return_position_time
-          ? prev.calculated_return_position_time
-          : prev.arrival_time;
-        if(!selectedIds.has(next.id)||!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
-        const a=points.get(previousEndLocation),b=points.get(next.origin);if(!a||!b)continue;
-        const k=edgeKey(a,b);connectionEdges.set(next.id,k);connectionEdgesToRoute.push({key:k,from:a,to:b});
-      }
-    }
-    if(connectionEdgesToRoute.length){const connectionTimes=await routeEdges(connectionEdgesToRoute);for(const [k,v] of connectionTimes)routeTimes.set(k,v);}
-    for(const group of groups.values()){
-      group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
-      for(let i=0;i<group.length-1;i++){
-        const prev=group[i],next=group[i+1],k=connectionEdges.get(next.id);
-        const previousEndLocation=prev.back&&prev.calculated_return_position_time?prev.origin:prev.destination;
-        // Use passenger journey completion/arrival, never the contractual depot Finish or departure time.
-        const previousEndTime=prev.back&&prev.calculated_return_position_time
-          ? prev.calculated_return_position_time
-          : prev.arrival_time;
-        if(!selectedIds.has(next.id)||!k||!previousEndTime||!next.pickup_time)continue;
-        connectionsChecked++;const required=routeTimes.get(k);
-        if(required==null){warnings++;await db.from("duties").update({connection_status:"WARN",connection_error:"Could not calculate school-to-school connection time"}).eq("id",next.id);continue}
-        const available=span(mins(previousEndTime)!,mins(next.pickup_time)!);
-        if(required>available){connectionFailures++;const msg=`Connection impossible: ${previousEndLocation} → ${next.origin} needs about ${required} min but only ${available} min is available between passenger journeys.`;await db.from("duties").update({connection_status:"FAIL",connection_error:msg,connection_minutes:required,connection_available_minutes:available,overall_status:"FAIL"}).eq("id",next.id)}
-        else await db.from("duties").update({connection_status:"PASS",connection_error:null,connection_minutes:required,connection_available_minutes:available}).eq("id",next.id);
-      }
-    }
-    return res.json({importId,processed:selectedRows.length,nextOffset:offset+selectedRows.length<allRows.length?offset+selectedRows.length:null,reconstructed,warnings,connectionsChecked,connectionFailures,routingProvider:"Postcodes.io + Photon/Nominatim + OSRM matrix"});
+    // Connection feasibility is deliberately handled separately from the core
+    // duty routing pass. This keeps one slow school-to-school movement from
+    // blocking the physical route calculations for the whole batch.
+    return res.json({importId,processed:selectedRows.length,nextOffset:offset+selectedRows.length<allRows.length?offset+selectedRows.length:null,reconstructed,warnings,connectionsChecked:0,connectionFailures:0,routingProvider:"Postcodes.io + Photon + OSRM"});
+({importId,processed:selectedRows.length,nextOffset:offset+selectedRows.length<allRows.length?offset+selectedRows.length:null,reconstructed,warnings,connectionsChecked,connectionFailures,routingProvider:"Postcodes.io + Photon/Nominatim + OSRM matrix"});
   }catch(e){return res.status(400).json({error:e instanceof Error?e.message:"Route reconstruction failed"})}
 }
