@@ -3,6 +3,13 @@ import {createClient} from "@supabase/supabase-js";
 const depot="Swans Travel, Broadgate, Chadderton, OL9 9XA";
 const depotPostcode="OL9 9XA";
 type Point=[number,number];
+
+async function fetchTimeout(input:RequestInfo|URL,init:RequestInit={},timeoutMs=12000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{return await fetch(input,{...init,signal:controller.signal});}
+  finally{clearTimeout(timer);}
+}
 type Edge={key:string,from:Point,to:Point};
 
 const mins=(v:string|null)=>{const m=v?.match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
@@ -55,7 +62,7 @@ async function geocodePostcodes(postcodes:string[]){
   const out=new Map<string,Point>();
   for(let i=0;i<postcodes.length;i+=100){
     const batch=postcodes.slice(i,i+100);
-    const r=await fetch("https://api.postcodes.io/postcodes",{method:"POST",headers:{"Content-Type":"application/json","User-Agent":"Swans-Duty-Checker/1.0"},body:JSON.stringify({postcodes:batch})});
+    const r=await fetchTimeout("https://api.postcodes.io/postcodes",{method:"POST",headers:{"Content-Type":"application/json","User-Agent":"Swans-Duty-Checker/1.0"},body:JSON.stringify({postcodes:batch})});
     if(!r.ok)continue;
     const j:any=await r.json();
     for(const item of j.result??[]){
@@ -88,13 +95,13 @@ async function geocodeMany(locations:string[],key?:string,master:Record<string,s
         if(key){
           const u=new URL("https://api.heigit.org/pelias/v1/search");
           u.searchParams.set("api_key",key);u.searchParams.set("text",q);u.searchParams.set("boundary.country","GBR");
-          const r=await fetch(u,{headers:{Authorization:key}});
+          const r=await fetchTimeout(u,{headers:{Authorization:key}});
           if(r.ok){const j:any=await r.json();const c=j.features?.[0]?.geometry?.coordinates;if(c)return [q,[Number(c[0]),Number(c[1])] as Point] as const;}
         }
         const clean=q.replace(/\b(AM|PM|RUN\d+)\b/gi,"").replace(/[*]/g,"").trim();
         const photon=new URL("https://photon.komoot.io/api/");
         photon.searchParams.set("q",clean);photon.searchParams.set("limit","1");photon.searchParams.set("countrycode","GB");
-        const pr=await fetch(photon,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+        const pr=await fetchTimeout(photon,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
         if(pr.ok){const pj:any=await pr.json();const pc=pj.features?.[0]?.geometry?.coordinates;if(pc)return [q,[Number(pc[0]),Number(pc[1])] as Point] as const;}
       }catch{}
       return null;
@@ -110,7 +117,7 @@ async function matrixBatch(edges:Edge[]){
   const sources=[...new Set(pairs.map(p=>p.from))],destinations=[...new Set(pairs.map(p=>p.to))];
   const u=new URL("https://router.project-osrm.org/table/v1/driving/"+points.map(p=>p.join(",")).join(";"));
   u.searchParams.set("sources",sources.join(";"));u.searchParams.set("destinations",destinations.join(";"));u.searchParams.set("annotations","duration");
-  const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+  const r=await fetchTimeout(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
   if(!r.ok)throw Error("OSRM matrix failed "+r.status);
   const j:any=await r.json();if(j.code!=="Ok")throw Error("OSRM matrix returned "+(j.code??"unknown error"));
   const destIndex=new Map(destinations.map((v,i)=>[v,i]));const out=new Map<string,number>();
@@ -127,7 +134,7 @@ async function routeEdges(edges:Edge[]){
         const vals=await Promise.all(batch.map(async e=>{
           try{
             const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false";
-            const r=await fetch(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
+            const r=await fetchTimeout(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
             if(!r.ok)return null;
             const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)return null;
             return [e.key,Math.ceil(Number(d)/60)] as const;
