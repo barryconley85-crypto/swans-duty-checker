@@ -7,10 +7,10 @@ const span=(a:number,b:number)=>b>=a?b-a:b+1440-a;
 
 export default async function handler(req:any,res:any){
   try{
-    if(req.method!=="POST")return res.status(405).json({error:"POST required"});
+    if(req.method!=="POST"&&req.method!=="GET")return res.status(405).json({error:"POST required"});
     const url=process.env.SUPABASE_URL,pub=process.env.SUPABASE_PUBLISHABLE_KEY,internal=process.env.DUTY_CHECKER_DB_KEY;
     if(!url||!pub||!internal)return res.status(503).json({error:"Supabase is not configured"});
-    const {importId}=req.body??{}; if(!importId)return res.status(400).json({error:"importId required"});
+    const {importId}=req.method==="GET" ? (req.query??{}) : (req.body??{}); if(!importId)return res.status(400).json({error:"importId required"});
     const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}});
     const {data:rows,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");
     if(error)throw error;
