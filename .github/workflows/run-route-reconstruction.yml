@@ -1,5 +1,5 @@
 name: Temporary Duty Route Reconstruction
-# execution pass 3
+# execution pass 4
 
 on:
   push:
@@ -12,8 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
-        offset: [0, 40, 80, 120, 160]
+        offset: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160]
     steps:
       - name: Route duty batch
         run: |
@@ -22,7 +23,7 @@ jobs:
             --retry 3 --retry-delay 5 \
             -X POST "https://swans-duty-checker.vercel.app/api/routes" \
             -H "Content-Type: application/json" \
-            --data '{"importId":"ZQoVu9Y1T4rolnfLz3gav","offset":${{ matrix.offset }},"limit":40}'
+            --data '{"importId":"ZQoVu9Y1T4rolnfLz3gav","offset":${{ matrix.offset }},"limit":10}'
 
   recalculate:
     needs: route
