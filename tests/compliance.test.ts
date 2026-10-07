@@ -12,3 +12,16 @@ describe("compliance calculations",()=>{
   it("includes an intermediate back-duty return leg before the next job",()=>{const rows=[{start_time:"06:00",pickup_time:"07:00",leave_time:"10:20",arrival_time:"10:20",finish_time:"12:00",outbound_route_minutes:190,return_route_minutes:60,depot_return_route_minutes:null,back:true,calculated_return_position_time:"11:20",origin:"Depot",destination:"School"},{start_time:"11:40",pickup_time:"11:50",leave_time:"12:20",arrival_time:"12:00",finish_time:"13:00",outbound_route_minutes:10,return_route_minutes:0,depot_return_route_minutes:null,back:false}];const plan=planEuDrivingBreaks(rows,[20]);expect(plan.drivingMinutes).toBe(270);expect(plan.status).toBe("FAIL")});
   it("does not reset the EU driving clock on a 15-minute first split",()=>{const rows=[{start_time:"06:00",pickup_time:"07:00",leave_time:"10:50",arrival_time:"10:50",finish_time:"11:05",outbound_route_minutes:250,return_route_minutes:0,depot_return_route_minutes:null,back:false},{start_time:"11:25",pickup_time:"11:25",leave_time:"12:05",arrival_time:"11:35",finish_time:"12:15",outbound_route_minutes:5,return_route_minutes:0,depot_return_route_minutes:null,back:false}];const plan=planEuDrivingBreaks(rows,[15]);expect(plan.plans.some(p=>p.minutes===15)).toBe(true);expect(plan.plans.some(p=>p.minutes===30)).toBe(true);expect(plan.status).toBe("PASS")});
 });
+import {dutyEnd,groupDuties} from "../src/lib/dutySequence";
+describe("duty sequence model",()=>{
+  it("uses the calculated return position as the end of a back duty",()=>{
+    expect(dutyEnd({back:true,origin:"Savio House",destination:"Blessed Thomas",arrival_time:"10:00",calculated_return_position_time:"15:00"})).toEqual({location:"Savio House",time:"15:00",kind:"return_position"});
+  });
+  it("uses the passenger destination for a normal duty",()=>{
+    expect(dutyEnd({back:false,destination:"School",arrival_time:"10:00"})).toEqual({location:"School",time:"10:00",kind:"passenger_end"});
+  });
+  it("keeps ON HIRE duties isolated",()=>{
+    const groups=groupDuties([{id:"1",driver_name:"ON HIRE",sort_order:1},{id:"2",driver_name:"ON HIRE",sort_order:2},{id:"3",driver_name:"Baz",sort_order:3},{id:"4",driver_name:"Baz",sort_order:4}]);
+    expect(groups.size).toBe(3); expect(groups.get("Baz")?.length).toBe(2);
+  });
+});

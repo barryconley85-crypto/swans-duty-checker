@@ -1,5 +1,6 @@
 import {createClient} from "@supabase/supabase-js";
 import {geocodeMany,routeEdges} from "./routes";
+import {dutyEnd,groupDuties} from "../src/lib/dutySequence.js";
 
 const depot="Swans Travel, Broadgate, Chadderton, OL9 9XA";
 const mins=(v:string|null)=>{const m=v?.match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
@@ -20,22 +21,24 @@ export default async function handler(req:any,res:any){
     if(masterError)throw masterError;
     const masterPostcodes:Record<string,string>={};
     for(const x of master??[])if(x.alias&&x.postcode)masterPostcodes[x.alias]=x.postcode;
-    const groups=new Map<string,any[]>();
-    for(const d of all){
-      const key=d.driver_name?String(d.driver_name):`ON_HIRE:${d.id}`;
-      const a=groups.get(key)??[]; a.push(d); groups.set(key,a);
-    }
-    const jobs:{prev:any,next:any;from:string;to:string}[]=[];
+    const groups=groupDuties(all);
+    const jobs:{prev:any,next:any;from:string;to:string;previousEnd:ReturnType<typeof dutyEnd>}[]=[];
+    const precheckUpdates:any[]=[];
     for(const group of groups.values()){
-      group.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
       for(let i=0;i<group.length-1;i++){
-        const prev=group[i],next=group[i+1];
-        const previousEndLocation=prev.back&&prev.calculated_return_position_time?prev.origin:prev.destination;
-        const previousEndTime=prev.back&&prev.calculated_return_position_time?prev.calculated_return_position_time:prev.arrival_time;
-        if(!previousEndLocation||!next.origin||!previousEndTime||!next.pickup_time)continue;
-        jobs.push({prev,next,from:String(previousEndLocation),to:String(next.origin)});
+        const prev=group[i],next=group[i+1],previousEnd=dutyEnd(prev);
+        if(prev.route_status!=="CALCULATED"){
+          precheckUpdates.push({id:next.id,connection_status:"WARN",connection_error:"Connection not checked because the previous duty route is not certified ("+(prev.route_status??"NOT_CHECKED")+").",connection_minutes:null,connection_available_minutes:null});
+          continue;
+        }
+        if(!previousEnd||!next.origin||!next.pickup_time){
+          precheckUpdates.push({id:next.id,connection_status:"WARN",connection_error:"Connection not checked because a physical end point or timetable time is missing.",connection_minutes:null,connection_available_minutes:null});
+          continue;
+        }
+        jobs.push({prev,next,from:previousEnd.location,to:String(next.origin),previousEnd});
       }
     }
+    for(let i=0;i<precheckUpdates.length;i+=10)await Promise.all(precheckUpdates.slice(i,i+10).map(u=>db.from("duties").update(u).eq("id",u.id)));
     const locations=[depot,...jobs.flatMap(j=>[j.from,j.to])];
     const points=await geocodeMany(locations,process.env.OPENROUTESERVICE_API_KEY,masterPostcodes);
     const edges=[] as any[];
@@ -51,8 +54,8 @@ export default async function handler(req:any,res:any){
     const updates:any[]=[];
     let checked=0,failures=0,warnings=0;
     for(const j of jobs){
-      const previousEndLocation=j.prev.back&&j.prev.calculated_return_position_time?j.prev.origin:j.prev.destination;
-      const previousEndTime=j.prev.back&&j.prev.calculated_return_position_time?j.prev.calculated_return_position_time:j.prev.arrival_time;
+      const previousEndLocation=j.previousEnd?.location;
+      const previousEndTime=j.previousEnd?.time;
       const a=points.get(j.from),b=points.get(j.to);
       if(!a||!b){
         warnings++;
@@ -61,7 +64,7 @@ export default async function handler(req:any,res:any){
       }
       const key=a.map((v:number)=>v.toFixed(6)).join(",")+"|"+b.map((v:number)=>v.toFixed(6)).join(",");
       const required=routes.get(key);
-      const available=span(mins(previousEndTime)!,mins(j.next.pickup_time)!);
+      const previousEndMinutes=mins(previousEndTime??null),nextPickupMinutes=mins(j.next.pickup_time); if(previousEndMinutes===null||nextPickupMinutes===null){warnings++;updates.push({id:j.next.id,connection_status:"WARN",connection_error:"Connection not checked because a valid end or pickup time is missing.",connection_minutes:null,connection_available_minutes:null});continue;} const available=span(previousEndMinutes,nextPickupMinutes);
       if(required==null){
         warnings++;
         updates.push({id:j.next.id,connection_status:"WARN",connection_error:`Could not calculate school-to-school connection: ${j.from} → ${j.to}`,connection_minutes:null,connection_available_minutes:available});

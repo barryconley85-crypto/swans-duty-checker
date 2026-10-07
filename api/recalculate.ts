@@ -1,5 +1,6 @@
 import {createClient} from "@supabase/supabase-js";
 import {minutes,spread,duration,addMinutes,scheduledBreakOpportunities,allocateWtdBreaks,planEuDrivingBreaks,wtdWorkingMinutes} from "../src/lib/compliance.js";
+import {groupDuties} from "../src/lib/dutySequence.js";
 
 const DOUBLE_MANNED_MAX=1260;
 const SINGLE_MANNED_MAX=900;
@@ -21,8 +22,7 @@ export default async function handler(req:any,res:any){
     const {importId}=req.body??{};if(!importId)return res.status(400).json({error:"importId required"});
     const {data:duties,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");if(error)throw error;
     const allDuties=duties??[];
-    const groups=new Map<string,any[]>();
-    for(const d of allDuties)if(d.driver_name){const key=String(d.driver_name).trim().toUpperCase()==="ON HIRE"?`ON_HIRE:${d.id}`:d.driver_name;const a=groups.get(key)??[];a.push(d);groups.set(key,a)}
+    const groups=groupDuties(allDuties);
 
     const doubleMannedIds=new Set<string>(),doubleGroups=new Map<string,any[]>();
     for(const d of allDuties){
@@ -47,10 +47,27 @@ export default async function handler(req:any,res:any){
       const maxWorkingDay=isDoubleManned?DOUBLE_MANNED_MAX:SINGLE_MANNED_MAX;
       const groupTimingErrors=rows.flatMap(r=>timingErrors(r).map(x=>({id:r.id,msg:x})));
       const connectionMinutes=rows.slice(0,-1).map(r=>r.connection_minutes??null) as (number|null)[];
+      const routeDataIssues:string[]=[];
+      rows.forEach((d,i)=>{
+        if(d.route_status!=="CALCULATED")routeDataIssues.push("Duty "+d.id+" route is not certified ("+(d.route_status??"NOT_CHECKED")+")");
+        if(d.first_position_route_minutes==null&&i===0)routeDataIssues.push("Duty "+d.id+" is missing depot-to-first route time");
+        if(d.outbound_route_minutes==null)routeDataIssues.push("Duty "+d.id+" is missing outbound route time");
+        if(d.return_route_minutes==null)routeDataIssues.push("Duty "+d.id+" is missing return route time");
+        if(d.back&&d.depot_return_route_minutes==null)routeDataIssues.push("Duty "+d.id+" is missing final depot return route time");
+        if(i<rows.length-1&&d.connection_status!=="PASS")routeDataIssues.push("Connection into duty "+rows[i+1].id+" is not certified ("+(d.connection_status??"NOT_CHECKED")+")");
+      });
       const dutyTimes=rows.map(r=>({start_time:r.start_time,pickup_time:r.pickup_time,leave_time:r.leave_time,arrival_time:r.arrival_time,finish_time:r.finish_time,back:Boolean(r.back),calculated_return_position_time:r.calculated_return_position_time,origin:r.origin,destination:r.destination,return_route_minutes:r.return_route_minutes??null,depot_return_route_minutes:r.depot_return_route_minutes??null,first_position_route_minutes:r.first_position_route_minutes??null,outbound_route_minutes:r.outbound_route_minutes??null}));
 
       const isOnHire=String(rows[0]?.driver_name??"").trim().toUpperCase()==="ON HIRE";
       if(isOnHire){for(const d of rows){const issues:string[]=[];if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");else if(d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");if(d.route_status==="WARN"&&d.route_error)issues.push(d.route_error);if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);issues.push("Driver is listed as ON HIRE; driver-hours/WTD compliance cannot be attributed to a named driver.");const overall=d.capacity_status==="FAIL"||d.connection_status==="FAIL"?"FAIL":"WARN";await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:["Driver assignment required before driver-hours compliance can be assessed"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:["Driver assignment required before WTD can be assessed"],break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Driver assignment required before driving-break compliance can be assessed"],issues,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null}).eq("id",d.id);}continue;}
+      if(routeDataIssues.length){
+        for(const d of rows){
+          const issues=[...routeDataIssues.filter(x=>x.includes(String(d.id))),...(d.connection_status==="FAIL"&&d.connection_error?[d.connection_error]:[])];
+          const overall=d.connection_status==="FAIL"?"FAIL":"WARN";
+          await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:["Compliance blocked until physical routing and connections are certified"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:[...routeDataIssues],break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Compliance blocked until physical routing and connections are certified"],issues:issues.length?issues:routeDataIssues,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null}).eq("id",d.id);
+        }
+        continue;
+      }
       if(groupTimingErrors.length){
         invalidTimings+=groupTimingErrors.length;
         for(const d of rows){
