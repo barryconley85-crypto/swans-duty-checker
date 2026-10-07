@@ -73,7 +73,7 @@ async function geocodePostcodes(postcodes:string[]){
   return out;
 }
 
-async function geocodeMany(locations:string[],key?:string,master:Record<string,string>={}){
+export async function geocodeMany(locations:string[],key?:string,master:Record<string,string>={}){
   const result=new Map<string,Point>();
   const locationMaster={...knownLocationPostcodes,...master};
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
@@ -120,7 +120,7 @@ async function matrixBatch(edges:Edge[]){
   return out;
 }
 
-async function routeEdges(edges:Edge[]){
+export async function routeEdges(edges:Edge[]){
   const out=new Map<string,number>(),batches:Edge[][]=[];
   for(let i=0;i<edges.length;i+=20)batches.push(edges.slice(i,i+20));
   for(let i=0;i<batches.length;i+=2){
