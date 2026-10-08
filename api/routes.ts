@@ -55,7 +55,12 @@ const knownLocationPostcodes:Record<string,string>={
   "ST BEDES AM":"M16 8HX",
   "ST BEDES PM":"M16 8HX",
   "Altrincham School Bus.":"WA14 1EN",
-  "Altrincham PM":"WA14 1EN"
+  "Altrincham School Bus":"WA14 1EN",
+  "Altrincham PM":"WA14 1EN",
+  "Macclesfield Train Station":"SK11 6JP",
+  "Liverpool Lime Street station":"L1 1JD",
+  "Travel Master":"M31 4RA",
+  "Travelmaster":"M31 4RA"
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 
@@ -82,7 +87,7 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
     if(isDepotOperationalLabel(q)){const p=postcodeMap.get(depotPostcode);if(p)result.set(q,p);continue;}
-    const pc=locationMaster[q]??(isOperationalLabel(q)?null:postcodeOf(q));
+    // A Coach Manager service label can still contain a genuine postcode. Use that postcode first,\n    // otherwise operational labels remain intentionally unresolved.\n    const pc=locationMaster[q]??postcodeOf(q)??null;
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
@@ -92,7 +97,7 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
   // For genuine physical locations without a postcode, use one bounded Photon lookup.
   // Do not fall through to multiple external geocoders: an unresolved point must be
   // surfaced as a route warning rather than holding the entire duty batch open.
-  const remaining=locations.filter(q=>!result.has(q)&&!isOperationalLabel(q));
+  const remaining=locations.filter(q=>!result.has(q)&&!isOperationalLabel(q)&&!postcodeOf(q));
   for(let i=0;i<remaining.length;i+=6){
     const batch=remaining.slice(i,i+6);
     const vals=await Promise.all(batch.map(async q=>{
