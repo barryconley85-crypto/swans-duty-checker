@@ -21,6 +21,7 @@ const pointKey=(p:Point)=>p.map(v=>v.toFixed(6)).join(",");
 const edgeKey=(a:Point,b:Point)=>pointKey(a)+"|"+pointKey(b);
 const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;
 const isOperationalLabel=(q:string)=>/^(WORSLEY ROUTE(?: - MGS)?|ALTRINCHAM SHUTTLE BUS|ROUTE [12] - |ST BEDES (?:AM|PM)|OHGS - |COACH \d|4 X PICK UPS|CLEANING(?: AT SWANS)?|STANDBY\b|WORK DAY|HOLIDAY|SICK|REST DAY)/i.test(String(q).trim());
+const isDepotOperationalLabel=(q:string)=>/^(CLEANING(?: AT SWANS)?|MOT VEHICLE CLEAN|LOLA LIFT TEST AT SWANS TRAVEL)$/i.test(String(q).trim());
 const knownLocationPostcodes:Record<string,string>={
   "Manchester Grammar School":"M13 0XT",
   "The Manchester Grammar School":"M13 0XT",
@@ -56,6 +57,7 @@ const knownLocationPostcodes:Record<string,string>={
   "Altrincham School Bus.":"WA14 1EN",
   "Altrincham PM":"WA14 1EN"
 };
+for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 
 function inferServiceKey(d:any,masterServices:Record<string,string>){const u=(String(d.origin??"")+" | "+String(d.destination??"")).toUpperCase();if(u.includes("ROUTE 2 - CHEADLE/BRAMHALL")||u.includes("ROUTE 2 - THE MANCHESTER GRAMMAR"))return "MGS_CHEADLE_BRAMHALL";if(u.includes("CITY CENTRE SHUTTLE"))return "MGS_CITY_CENTRE";if(u.includes("WORSLEY ROUTE"))return "MGS_WORSLEY";if(u.includes("ALTRINCHAM SCHOOL BUS"))return "MGS_ALTRINCHAM_JUNIORS";if(u.includes("ALTRINCHAM DOUBLE PM"))return "MGS_ALTRINCHAM_SENIORS";if(u.includes("OHGS - R1&2 ROCHDALE"))return "OHGS_R1_R2_ROCHDALE";if(u.includes("OHGS - R3 - DUKINFIELD"))return "OHGS_R3_DUKINFIELD";if(u.includes("OHGS - R4 - SADDLEWORTH"))return "OHGS_R4_SADDLEWORTH";if(u.includes("ST BEDES")){if(u.includes("WORSLEY")||/ST BEDES (?:AM|PM) 1\b/.test(u))return "ST_BEDES_SB1_WORSLEY";if(u.includes("MIDDLETON")||/ST BEDES (?:AM|PM) 2\b/.test(u))return "ST_BEDES_SB2_MIDDLETON";if(u.includes("MOTTRAM/HYDE")||/ST BEDES (?:AM|PM) 3\b/.test(u))return "ST_BEDES_SB3_MOTTRAM_HYDE";if(u.includes("STOCKPORT")||/ST BEDES (?:AM|PM) 4\b/.test(u))return "ST_BEDES_SB4_STOCKPORT";if(u.includes("ALDERLEY EDGE")||/ST BEDES (?:AM|PM) 5\b/.test(u))return "ST_BEDES_SB5_ALDERLEY_EDGE";if(u.includes("HALE")||/ST BEDES (?:AM|PM) 6\b/.test(u))return "ST_BEDES_SB6_HALE";if(u.includes("TIMPERLEY")||/ST BEDES (?:AM|PM) 7\b/.test(u))return "ST_BEDES_SB7_TIMPERLEY";}return masterServices[d.origin]??masterServices[d.destination]??null;}
 
@@ -79,6 +81,7 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
   const locationMaster={...knownLocationPostcodes,...master};
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
+    if(isDepotOperationalLabel(q)){const p=postcodeMap.get(depotPostcode);if(p)result.set(q,p);continue;}
     const pc=isOperationalLabel(q)?null:(locationMaster[q]??postcodeOf(q));
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
