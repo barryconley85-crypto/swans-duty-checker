@@ -28,11 +28,11 @@ export default async function handler(req:any,res:any){
       for(let i=0;i<group.length-1;i++){
         const prev=group[i],next=group[i+1],previousEnd=dutyEnd(prev);
         if(prev.route_status!=="CALCULATED"){
-          precheckUpdates.push({id:next.id,connection_status:"WARN",connection_error:"Connection not checked because the previous duty route is not certified ("+(prev.route_status??"NOT_CHECKED")+").",connection_minutes:null,connection_available_minutes:null});
+          precheckUpdates.push({id:prev.id,connection_status:"WARN",connection_error:"Connection into the next duty not checked because this duty route is not certified ("+(prev.route_status??"NOT_CHECKED")+").",connection_minutes:null,connection_available_minutes:null});
           continue;
         }
         if(!previousEnd||!next.origin||!next.pickup_time){
-          precheckUpdates.push({id:next.id,connection_status:"WARN",connection_error:"Connection not checked because a physical end point or timetable time is missing.",connection_minutes:null,connection_available_minutes:null});
+          precheckUpdates.push({id:prev.id,connection_status:"WARN",connection_error:"Connection into the next duty not checked because a physical end point or timetable time is missing.",connection_minutes:null,connection_available_minutes:null});
           continue;
         }
         jobs.push({prev,next,from:previousEnd.location,to:String(next.origin),previousEnd});
@@ -59,22 +59,22 @@ export default async function handler(req:any,res:any){
       const a=points.get(j.from),b=points.get(j.to);
       if(!a||!b){
         warnings++;
-        updates.push({id:j.next.id,connection_status:"WARN",connection_error:`Could not resolve physical connection point: ${j.from} → ${j.to}`,connection_minutes:null,connection_available_minutes:null});
+        updates.push({id:j.prev.id,connection_status:"WARN",connection_error:`Could not resolve physical connection point: ${j.from} → ${j.to}`,connection_minutes:null,connection_available_minutes:null});
         continue;
       }
       const key=a.map((v:number)=>v.toFixed(6)).join(",")+"|"+b.map((v:number)=>v.toFixed(6)).join(",");
       const required=routes.get(key);
-      const previousEndMinutes=mins(previousEndTime??null),nextPickupMinutes=mins(j.next.pickup_time); if(previousEndMinutes===null||nextPickupMinutes===null){warnings++;updates.push({id:j.next.id,connection_status:"WARN",connection_error:"Connection not checked because a valid end or pickup time is missing.",connection_minutes:null,connection_available_minutes:null});continue;} const available=span(previousEndMinutes,nextPickupMinutes);
+      const previousEndMinutes=mins(previousEndTime??null),nextPickupMinutes=mins(j.next.pickup_time); if(previousEndMinutes===null||nextPickupMinutes===null){warnings++;updates.push({id:j.prev.id,connection_status:"WARN",connection_error:"Connection into the next duty not checked because a valid end or pickup time is missing.",connection_minutes:null,connection_available_minutes:null});continue;} const available=span(previousEndMinutes,nextPickupMinutes);
       if(required==null){
         warnings++;
-        updates.push({id:j.next.id,connection_status:"WARN",connection_error:`Could not calculate school-to-school connection: ${j.from} → ${j.to}`,connection_minutes:null,connection_available_minutes:available});
+        updates.push({id:j.prev.id,connection_status:"WARN",connection_error:`Could not calculate school-to-school connection: ${j.from} → ${j.to}`,connection_minutes:null,connection_available_minutes:available});
         continue;
       }
       checked++;
       if(required>available){
         failures++;
-        updates.push({id:j.next.id,connection_status:"FAIL",connection_error:`Connection impossible: ${previousEndLocation} → ${j.next.origin} needs about ${required} min but only ${available} min is available between passenger journeys.`,connection_minutes:required,connection_available_minutes:available,overall_status:"FAIL"});
-      }else updates.push({id:j.next.id,connection_status:"PASS",connection_error:null,connection_minutes:required,connection_available_minutes:available});
+        updates.push({id:j.prev.id,connection_status:"FAIL",connection_error:`Connection impossible: ${previousEndLocation} → ${j.next.origin} needs about ${required} min but only ${available} min is available between passenger journeys.`,connection_minutes:required,connection_available_minutes:available,overall_status:"FAIL"});
+      }else updates.push({id:j.prev.id,connection_status:"PASS",connection_error:null,connection_minutes:required,connection_available_minutes:available});
     }
     for(let i=0;i<updates.length;i+=10)await Promise.all(updates.slice(i,i+10).map(u=>db.from("duties").update(u).eq("id",u.id)));
     return res.json({importId,connectionsChecked:checked,connectionFailures:failures,warnings,processed:updates.length});
