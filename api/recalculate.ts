@@ -62,27 +62,6 @@ export default async function handler(req:any,res:any){
 
       const isOnHire=String(rows[0]?.driver_name??"").trim().toUpperCase()==="ON HIRE";
       if(isOnHire){for(const d of rows){const issues:string[]=[];if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");else if(d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");if(d.route_status==="WARN"&&d.route_error)issues.push(d.route_error);if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);issues.push("Driver is listed as ON HIRE; driver-hours/WTD compliance cannot be attributed to a named driver.");const overall=d.capacity_status==="FAIL"||d.connection_status==="FAIL"?"FAIL":"WARN";await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:["Driver assignment required before driver-hours compliance can be assessed"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:["Driver assignment required before WTD can be assessed"],break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Driver assignment required before driving-break compliance can be assessed"],issues,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null}).eq("id",d.id);}continue;}
-      const ownRouteDataIssues=routeDataIssuesByDuty.get(d.id)??[];
-      if(ownRouteDataIssues.length){
-        const issues=[...ownRouteDataIssues,...(d.connection_status==="FAIL"&&d.connection_error?[d.connection_error]:[])];
-        const overall=d.connection_status==="FAIL"?"FAIL":"WARN";
-        await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:["Compliance blocked until this duty's physical routing and connections are certified"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:ownRouteDataIssues,break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Compliance blocked until this duty's physical routing and connections are certified"],issues,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null}).eq("id",d.id);
-        continue;
-      }
-      const ownTimingErrors=groupTimingErrors.filter(x=>x.id===d.id).map(x=>x.msg);
-      if(ownTimingErrors.length){
-        invalidTimings+=ownTimingErrors.length;
-        const issues=[...new Set([...ownTimingErrors,...(d.connection_status==="FAIL"&&d.connection_error?[d.connection_error]:[])])];
-        await db.from("duties").update({
-          overall_status:(d.capacity_status==="FAIL"||d.connection_status==="FAIL")?"FAIL":"WARN",data_quality_status:"FAIL",hours_status:"WARN",hours_issues:["Compliance blocked by invalid source timing"],
-          wtd_status:"WARN",wtd_minutes:null,wtd_issues:["Compliance blocked by invalid source timing"],break_minutes:0,break_allocations:[],
-          wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Compliance blocked by invalid source timing"],
-          calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null,
-          issues:issues.length?issues:["Invalid source timing detected"]
-        }).eq("id",d.id);
-        continue;
-      }
-
       if(!starts.length||!finishes.length)continue;
       const daySpread=spread(Math.min(...starts),Math.max(...finishes));
       const hours=daySpread>maxWorkingDay?"FAIL":"PASS";
@@ -102,6 +81,14 @@ export default async function handler(req:any,res:any){
 
       for(let i=0;i<rows.length;i++){
         const d=rows[i],next=rows[i+1];
+        const ownRouteDataIssues=routeDataIssuesByDuty.get(d.id)??[];
+        const ownTimingErrors=groupTimingErrors.filter(x=>x.id===d.id).map(x=>x.msg);
+        if(ownRouteDataIssues.length||ownTimingErrors.length){
+          const issues=[...new Set([...ownRouteDataIssues,...ownTimingErrors,...(d.connection_status==="FAIL"&&d.connection_error?[d.connection_error]:[])])];
+          const overall=d.connection_status==="FAIL"?"FAIL":"WARN";
+          await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:ownTimingErrors.length?["Compliance blocked by invalid source timing"]:["Compliance blocked until this duty's physical routing and connections are certified"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:ownTimingErrors.length?["Compliance blocked by invalid source timing"]:ownRouteDataIssues,break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:ownTimingErrors.length?["Compliance blocked by invalid source timing"]:["Compliance blocked until this duty's physical routing and connections are certified"],issues,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null}).eq("id",d.id);
+          continue;
+        }
         const dutyBreaks=opportunities.map((o,idx)=>({...o,wtdAllocated:wtdAllocated[idx]?.wtdAllocated??0,euAllocated:euPlan.plans.filter(p=>p.start===o.start&&p.end===o.end).reduce((s,p)=>s+p.minutes,0)})).filter(o=>o.dutyIndex===i&&(o.wtdAllocated>0||o.euAllocated>0||(o.source==="between_jobs"&&o.minutes>=15)));
         const previousEndTime=d.back&&d.calculated_return_position_time?d.calculated_return_position_time:d.arrival_time;
         const nextTravel=d.connection_minutes??null;
