@@ -87,7 +87,9 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
     if(isDepotOperationalLabel(q)){const p=postcodeMap.get(depotPostcode);if(p)result.set(q,p);continue;}
-    // A Coach Manager service label can still contain a genuine postcode. Use that postcode first,\n    // otherwise operational labels remain intentionally unresolved.\n    const pc=locationMaster[q]??postcodeOf(q)??null;
+    // A Coach Manager service label can still contain a genuine postcode. Use that postcode first.
+    // Otherwise operational labels remain intentionally unresolved.
+    const pc=locationMaster[q]??postcodeOf(q)??null;
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
