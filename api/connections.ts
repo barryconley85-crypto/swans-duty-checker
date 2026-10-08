@@ -1,5 +1,5 @@
 import {createClient} from "@supabase/supabase-js";
-import {geocodeMany,routeEdges} from "./routes";
+import {geocodeMany,routeEdges} from "./routes.js";
 import {dutyEnd,groupDuties} from "../src/lib/dutySequence.js";
 
 const depot="Swans Travel, Broadgate, Chadderton, OL9 9XA";
