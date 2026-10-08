@@ -60,7 +60,14 @@ const knownLocationPostcodes:Record<string,string>={
   "Macclesfield Train Station":"SK11 6JP",
   "Liverpool Lime Street station":"L1 1JD",
   "Travel Master":"M31 4RA",
-  "Travelmaster":"M31 4RA"
+  "Travelmaster":"M31 4RA",
+  "Manchester Airport":"M90 1QX",
+  "Bradley Green Community Primary School":"SK14 4NA",
+  "Deva Roman Centre, Chester":"CH1 1NL",
+  "Altrincham Interchange Bus Stop":"WA14 1EN",
+  "Altrincham Inter via Knutsford Bus St":"WA14 1EN",
+  "DRIVER** Arcadia Library/Leisure,M19 3PH":"M19 3PH",
+  "DRIVER** Arcadia Librar/Leisure,M19 3PH":"M19 3PH"
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 
@@ -89,7 +96,8 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
     if(isDepotOperationalLabel(q)){const p=postcodeMap.get(depotPostcode);if(p)result.set(q,p);continue;}
     // A Coach Manager service label can still contain a genuine postcode. Use that postcode first.
     // Otherwise operational labels remain intentionally unresolved.
-    const pc=locationMaster[q]??postcodeOf(q)??null;
+    const normalised=q.trim().replace(/\\s+/g," ").replace(/[.,]+$/,"");
+    const pc=locationMaster[q]??locationMaster[normalised]??postcodeOf(q)??null;
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
@@ -190,18 +198,11 @@ export default async function handler(req:any,res:any){
         connection_status:"NOT_CHECKED",connection_error:null,connection_minutes:null,connection_available_minutes:null
       }).eq("id",d.id);
       const pickupM=mins(d.pickup_time),leaveM=mins(d.leave_time),arrivalM=mins(d.arrival_time);
-      if(arrivalM!==null&&leaveM!==null&&leaveM<arrivalM){
-        await db.from("duties").update({
-          route_status:"WARN",route_error:`Invalid source timing: Leave ${d.leave_time} is before Arrival ${d.arrival_time}; waiting/rest cannot be calculated.`
-        }).eq("id",d.id);
-        continue;
-      }
-      if(pickupM!==null&&arrivalM!==null&&arrivalM<pickupM){
-        await db.from("duties").update({
-          route_status:"WARN",route_error:`Invalid source timing: Arrival ${d.arrival_time} is before Pickup ${d.pickup_time}.`
-        }).eq("id",d.id);
-        continue;
-      }
+      const sourceTimingError=arrivalM!==null&&leaveM!==null&&leaveM<arrivalM
+        ? `Invalid source timing: Leave ${d.leave_time} is before Arrival ${d.arrival_time}; waiting/rest cannot be calculated.`
+        : pickupM!==null&&arrivalM!==null&&arrivalM<pickupM
+          ? `Invalid source timing: Arrival ${d.arrival_time} is before Pickup ${d.pickup_time}.`
+          : null;
       const a=d.origin?points.get(d.origin):null,b=d.destination?points.get(d.destination):null;if(!a||!b){const missing=[!a?d.origin:null,!b?d.destination:null].filter(Boolean).join(" / ");await db.from("duties").update({route_status:"WARN",route_error:`Physical route point unresolved: ${missing}. A service label cannot be used as a physical address.`}).eq("id",d.id);continue;}
       const out=edgeKey(a,b),first=edgeKey(points.get(depot)!,a),ret=edgeKey(b,points.get(depot)!);edgeMap.set(first,{key:first,from:points.get(depot)!,to:a});edgeMap.set(out,{key:out,from:a,to:b});edgeMap.set(ret,{key:ret,from:b,to:points.get(depot)!});let backReturn:string|undefined,backFinish:string|undefined;if(d.back){backReturn=edgeKey(b,a);backFinish=edgeKey(a,points.get(depot)!);edgeMap.set(backReturn,{key:backReturn,from:b,to:a});edgeMap.set(backFinish,{key:backFinish,from:a,to:points.get(depot)!});}dutyEdges.set(d.id,{first,outbound:out,ret,backReturn,backFinish});
     }
@@ -218,7 +219,7 @@ export default async function handler(req:any,res:any){
         if(d.back){const returnLeave=d.return_leave_time??d.leave_time;if(!returnLeave)throw Error("Missing return departure time");if(ret==null)throw Error("No return passenger route could be calculated");calculatedReturnPosition=add(returnLeave,ret);reconstructed++}
         if(!finish){if(d.back){if(!calculatedReturnPosition)throw Error("Missing calculated return position time");if(backFinish==null)throw Error("No depot return route could be calculated after the return passenger journey");finish=add(calculatedReturnPosition,backFinish);reconstructed++}else{if(ret==null)throw Error("No return route could be calculated");if(!d.leave_time)throw Error("Missing Leave time for depot return");finish=add(d.leave_time,ret);reconstructed++}}
         d.arrival_time=arrival;d.return_arrival_time=returnArrival;d.finish_time=finish;
-        const isFirstDuty=firstDutyIds.has(d.id); const pickupForFirst=mins(d.pickup_time); const firstStart=mins(d.start_time); const firstAvailable=isFirstDuty&&firstStart!==null&&pickupForFirst!==null&&first!=null&&pickupForFirst>=firstStart+30?pickupForFirst-(firstStart+30):null; const firstFeasible=!isFirstDuty||(first!=null&&firstAvailable!=null&&first<=firstAvailable); updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,calculated_return_position_time:calculatedReturnPosition,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:firstFeasible?"CALCULATED":"WARN",route_error:firstFeasible?null:`First position impossible: depot → ${d.origin} needs about ${first??0} min but only ${firstAvailable??0} min is available after the 30-minute vehicle check period.`,first_position_route_minutes:isFirstDuty?(first??null):null,first_position_available_minutes:isFirstDuty?firstAvailable:null,first_position_status:isFirstDuty?(firstFeasible?"PASS":"FAIL"):null,first_position_error:isFirstDuty?(firstFeasible?null:`Depot → ${d.origin} requires about ${first??0} min; available from ${add(d.start_time!,30)} to ${d.pickup_time} is ${firstAvailable??0} min.`):null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null,depot_return_route_minutes:backFinish??null,contract_service_key:inferServiceKey(d,masterServices)});
+        const isFirstDuty=firstDutyIds.has(d.id); const pickupForFirst=mins(d.pickup_time); const firstStart=mins(d.start_time); const firstAvailable=isFirstDuty&&firstStart!==null&&pickupForFirst!==null&&first!=null&&pickupForFirst>=firstStart+30?pickupForFirst-(firstStart+30):null; const firstFeasible=!isFirstDuty||(first!=null&&firstAvailable!=null&&first<=firstAvailable); updates.push({id:d.id,arrival_time:arrival,return_arrival_time:returnArrival,calculated_return_position_time:calculatedReturnPosition,finish_time:finish,arrival_estimated:arrivalWasMissing,finish_estimated:finishWasMissing,route_status:firstFeasible?"CALCULATED":"WARN",route_error:!firstFeasible?`First position impossible: depot → ${d.origin} needs about ${first??0} min but only ${firstAvailable??0} min is available after the 30-minute vehicle check period.`:sourceTimingError,first_position_route_minutes:isFirstDuty?(first??null):null,first_position_available_minutes:isFirstDuty?firstAvailable:null,first_position_status:isFirstDuty?(firstFeasible?"PASS":"FAIL"):null,first_position_error:isFirstDuty?(firstFeasible?null:`Depot → ${d.origin} requires about ${first??0} min; available from ${add(d.start_time!,30)} to ${d.pickup_time} is ${firstAvailable??0} min.`):null,outbound_route_minutes:outbound??null,return_route_minutes:ret??null,depot_return_route_minutes:backFinish??null,contract_service_key:inferServiceKey(d,masterServices)});
       }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
     }
     for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
