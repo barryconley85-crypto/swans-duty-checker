@@ -96,7 +96,7 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
     if(isDepotOperationalLabel(q)){const p=postcodeMap.get(depotPostcode);if(p)result.set(q,p);continue;}
     // A Coach Manager service label can still contain a genuine postcode. Use that postcode first.
     // Otherwise operational labels remain intentionally unresolved.
-    const normalised=q.trim().replace(/\\s+/g," ").replace(/[.,]+$/,"");
+    const normalised=q.trim().replace(/\s+/g," ").replace(/[.,]+$/,"");
     const pc=locationMaster[q]??locationMaster[normalised]??postcodeOf(q)??null;
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
