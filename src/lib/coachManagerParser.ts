@@ -24,8 +24,8 @@ function parseCsvRows(text:string):Record<string,string>[]{
       quote=!quote; continue;
     }
     if(ch===','&&!quote){row.push(cell);cell="";continue;}
-    if((ch==='\\n'||ch==='\\r')&&!quote){
-      if(ch==='\\r'&&text[i+1]==='\\n')i++;
+    if((ch==='\n'||ch==='\r')&&!quote){
+      if(ch==='\r'&&text[i+1]==='\n')i++;
       row.push(cell);cell="";
       if(row.some(v=>v.trim()!==""))rows.push(row);
       row=[];continue;
