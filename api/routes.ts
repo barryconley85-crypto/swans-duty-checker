@@ -1,10 +1,8 @@
 import {createClient} from "@supabase/supabase-js";
 import {groupDuties} from "../src/lib/dutySequence.js";
-
 const depot="Swans Travel, Broadgate, Chadderton, OL9 9XA";
 const depotPostcode="OL9 9XA";
 type Point=[number,number];
-
 async function fetchTimeout(input:RequestInfo|URL,init:RequestInit={},timeoutMs=12000){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),timeoutMs);
@@ -12,11 +10,9 @@ async function fetchTimeout(input:RequestInfo|URL,init:RequestInit={},timeoutMs=
   finally{clearTimeout(timer);}
 }
 type Edge={key:string,from:Point,to:Point};
-
 const mins=(v:string|null)=>{const m=v?.match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null};
 const span=(a:number,b:number)=>b>=a?b-a:b+1440-a;
 const add=(v:string,n:number)=>{const base=mins(v);if(base===null)throw Error("Cannot calculate from missing time");const x=((base+n)%1440+1440)%1440;return String(Math.floor(x/60)).padStart(2,"0")+":"+String(x%60).padStart(2,"0")};
-
 const pointKey=(p:Point)=>p.map(v=>v.toFixed(6)).join(",");
 const edgeKey=(a:Point,b:Point)=>pointKey(a)+"|"+pointKey(b);
 const postcodeOf=(q:string)=>q.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i)?.[1]?.replace(/\s+/g," ").toUpperCase()??null;
@@ -81,15 +77,10 @@ const knownLocationPostcodes:Record<string,string>={
   "COACH 2 Alderley Park":"SK10 4TG",
   "Alderley Park - As per timetable":"SK10 4TG",
   "Altrincham Shuttle Bus":"WA14 1EN",
-  "Cheadle/Bramhall Shuttle Bus":"SK8 1AL",
-  "Route 2 - Cheadle/Bramhall Shuttle Bus":"SK8 1AL",
-  "Route 1 - City Centre Shuttle Bus":"M1 3BB",
   "The Municipal Hotel, Dale Street, L2 2DH":"L2 2DH"
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
-
 function inferServiceKey(d:any,masterServices:Record<string,string>){const u=(String(d.origin??"")+" | "+String(d.destination??"")).toUpperCase();if(u.includes("ROUTE 2 - CHEADLE/BRAMHALL")||u.includes("ROUTE 2 - THE MANCHESTER GRAMMAR"))return "MGS_CHEADLE_BRAMHALL";if(u.includes("CITY CENTRE SHUTTLE"))return "MGS_CITY_CENTRE";if(u.includes("WORSLEY ROUTE"))return "MGS_WORSLEY";if(u.includes("ALTRINCHAM SCHOOL BUS"))return "MGS_ALTRINCHAM_JUNIORS";if(u.includes("ALTRINCHAM DOUBLE PM"))return "MGS_ALTRINCHAM_SENIORS";if(u.includes("OHGS - R1&2 ROCHDALE"))return "OHGS_R1_R2_ROCHDALE";if(u.includes("OHGS - R3 - DUKINFIELD"))return "OHGS_R3_DUKINFIELD";if(u.includes("OHGS - R4 - SADDLEWORTH"))return "OHGS_R4_SADDLEWORTH";if(u.includes("ST BEDES")){if(u.includes("WORSLEY")||/ST BEDES (?:AM|PM) 1\b/.test(u))return "ST_BEDES_SB1_WORSLEY";if(u.includes("MIDDLETON")||/ST BEDES (?:AM|PM) 2\b/.test(u))return "ST_BEDES_SB2_MIDDLETON";if(u.includes("MOTTRAM/HYDE")||/ST BEDES (?:AM|PM) 3\b/.test(u))return "ST_BEDES_SB3_MOTTRAM_HYDE";if(u.includes("STOCKPORT")||/ST BEDES (?:AM|PM) 4\b/.test(u))return "ST_BEDES_SB4_STOCKPORT";if(u.includes("ALDERLEY EDGE")||/ST BEDES (?:AM|PM) 5\b/.test(u))return "ST_BEDES_SB5_ALDERLEY_EDGE";if(u.includes("HALE")||/ST BEDES (?:AM|PM) 6\b/.test(u))return "ST_BEDES_SB6_HALE";if(u.includes("TIMPERLEY")||/ST BEDES (?:AM|PM) 7\b/.test(u))return "ST_BEDES_SB7_TIMPERLEY";}return masterServices[d.origin]??masterServices[d.destination]??null;}
-
 async function geocodePostcodes(postcodes:string[]){
   const out=new Map<string,Point>();
   for(let i=0;i<postcodes.length;i+=100){
@@ -104,7 +95,6 @@ async function geocodePostcodes(postcodes:string[]){
   }
   return out;
 }
-
 export async function geocodeMany(locations:string[],key?:string,master:Record<string,string>={}){
   const result=new Map<string,Point>();
   const locationMaster={...knownLocationPostcodes,...master};
@@ -122,7 +112,6 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
   if(!result.has(depot)){
     const p=postcodeMap.get(depotPostcode);if(p)result.set(depot,p);
   }
-
   // For genuine physical locations without a postcode, use one bounded Photon lookup.
   // Do not fall through to multiple external geocoders: an unresolved point must be
   // surfaced as a route warning rather than holding the entire duty batch open.
@@ -157,7 +146,6 @@ async function matrixBatch(edges:Edge[]){
   for(const p of pairs){const seconds=j.durations?.[sources.indexOf(p.from)]?.[destIndex.get(p.to)!];if(seconds!=null)out.set(p.key,Math.ceil(Number(seconds)/60));}
   return out;
 }
-
 export async function routeEdges(edges:Edge[]){
   const out=new Map<string,number>(),batches:Edge[][]=[];
   for(let i=0;i<edges.length;i+=20)batches.push(edges.slice(i,i+20));
@@ -195,7 +183,6 @@ export default async function handler(req:any,res:any){
       if(row.alias&&row.postcode)masterPostcodes[row.alias]=row.postcode;
       if(row.alias&&row.service_key)masterServices[row.alias]=row.service_key;
     }
-
     const {data,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");if(error)throw error;
     const allRows=data??[],offset=Math.max(0,Number(req.body?.offset??0)),limit=Math.min(40,Math.max(1,Number(req.body?.limit??40)));
     const selectedRows=allRows.slice(offset,offset+limit);
@@ -243,7 +230,6 @@ export default async function handler(req:any,res:any){
       }catch(err){warnings++;updates.push({id:d.id,route_status:"WARN",route_error:err instanceof Error?err.message:"Route failed"})}
     }
     for(let i=0;i<updates.length;i+=15)await Promise.all(updates.slice(i,i+15).map(u=>db.from("duties").update(u).eq("id",u.id)));
-
     // Connection feasibility is deliberately handled separately from the core
     // duty routing pass. This keeps one slow school-to-school movement from
     // blocking the physical route calculations for the whole batch.
