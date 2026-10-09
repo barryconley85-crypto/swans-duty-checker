@@ -48,7 +48,7 @@ function instructionStops(text:string|null):{location:string;time:string|null}[]
     let segment=source.slice(i===0?0:(matches[i-1].index??0)+(matches[i-1][0]?.length??0),start).trim();
     segment=segment.replace(/^.*?(?=(?:\b(?:1st|2nd|3rd|4th|5th|6th|pick.?up|pickup|drop.?off|arrival|destination|depart)\b))/i,"");
     segment=segment.replace(/\b(?:driver|contact|recommendations?|client|passengers?|all coaches|strictly no alcohol|what3words).*$/i,"").trim();
-    segment=segment.replace(/^(?:1st|2nd|3rd|4th|5th|6th)\s+pick.?up\s*/i,"").replace(/^pick.?up\s*/i,"");
+    segment=segment.replace(/^(?:1st|2nd|3rd|4th|5th|6th)\s+pick.?up\s*/i,"").replace(/^pick.?up\s*/i,"").replace(/^(?:arrival\s+to\s+depart|depart(?:\s+and\s+transfer)?(?:\s+to)?|transfer\s+to)\s*/i,"").trim();
     segment=segment.replace(/[,;:\-]+$/,"").trim();
     const timeMatch=segment.match(/\b(\d{1,2}):?(\d{2})hrs?\b/i)||segment.match(/\b(\d{1,2}):(\d{2})\b/);
     const t=timeMatch?String(Number(timeMatch[1])).padStart(2,"0")+":"+timeMatch[2]:null;
