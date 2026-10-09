@@ -19,10 +19,6 @@ function parseCsvRows(text:string):Record<string,string>[]{
   const rows:string[][]=[]; let row:string[]=[], cell="", quote=false;
   for(let i=0;i<text.length;i++){
     const ch=text[i];
-    if(ch==="\\"){
-      cell+=ch;
-      continue;
-    }
     if(ch==='"'){
       if(quote&&text[i+1]==='"'){cell+='"';i++;continue;}
       quote=!quote; continue;
