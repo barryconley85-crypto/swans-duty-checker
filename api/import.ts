@@ -1,4 +1,4 @@
-import Busboy from "busboy"; import pdfParse from "pdf-parse"; import * as XLSX from "xlsx"; import {createClient} from "@supabase/supabase-js"; import {nanoid} from "nanoid"; import {parseCoachManagerText,parseCoachManagerCsv,parseCoachManagerRows,isPrivateHireCsv} from "../src/lib/coachManagerParser.js";
+import Busboy from "busboy"; import pdfParse from "pdf-parse"; import * as XLSX from "xlsx"; import {createClient} from "@supabase/supabase-js"; import {nanoid} from "nanoid"; import {parseCoachManagerText,parseCoachManagerCsv,parseCoachManagerRows,parsePrivateHireCsv,isPrivateHireCsv} from "../src/lib/coachManagerParser.js";
 export const config={api:{bodyParser:false}};
 async function readUpload(req:any):Promise<{name:string;buffer:Buffer}>{return new Promise((resolve,reject)=>{const bb=Busboy({headers:req.headers});let name="upload";const chunks:Buffer[]=[];bb.on("file",(_field:any,file:any,info:any)=>{name=info.filename||name;file.on("data",(x:Buffer)=>chunks.push(x));});bb.on("finish",()=>resolve({name,buffer:Buffer.concat(chunks)}));bb.on("error",reject);req.pipe(bb)})}
 export default async function handler(req:any,res:any){try{
