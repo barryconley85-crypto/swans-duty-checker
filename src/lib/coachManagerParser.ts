@@ -41,31 +41,36 @@ const postcode=/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 function instructionStops(text:string|null):{location:string;time:string|null}[]{
   if(!text)return [];
   const lines=String(text).split(/\r?\n/).map(x=>x.replace(/\s+/g," ").trim());
-  const out:{location:string;time:string|null}[]=[];
-  let lastBoundary=0;
-  for(let i=0;i<lines.length;i++){
-    const line=lines[i]; if(!line) { lastBoundary=i+1; continue; }
-    const m=line.match(postcode); if(!m)continue;
-    const pc=m[1].replace(/\s+/g," ").toUpperCase();
-    let marker=-1;
-    for(let j=i;j>=Math.max(lastBoundary,i-6);j--){
-      if(/\b(?:\d{1,2}:?\d{2})hrs?\b/i.test(lines[j])||/\b\d{1,2}:\d{2}\b/.test(lines[j])){marker=j;break;}
-    }
-    let t:RegExpMatchArray|null=marker>=0?lines[marker].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i):null;
-    if(!t&&marker>=0)t=lines[marker].match(/\b(\d{1,2}):(\d{2})\b/);
-    const labelParts:string[]=[];
-    const from=marker>=0?marker+1:Math.max(lastBoundary,i-3);
-    for(let j=from;j<=i;j++){
-      let s=lines[j];
-      s=s.replace(/\b\d{1,2}:?\d{2}hrs?\b/ig,"").replace(postcode,"").trim();
-      if(!s||/^(?:1st|2nd|3rd|4th|5th|pick.?up|arrival|departing from there)/i.test(s))continue;
-      if(/^(?:driver|contact names?|glen|jason|rachel|michelle)\b/i.test(s))continue;
-      if(/\b\d{5,}\b/.test(s)&&!/[A-Za-z]{2}\d/.test(s))continue;
-      labelParts.push(s);
-    }
-    const label=labelParts.join(", ").replace(/\s*,\s*,+/g,", ").replace(/\s+/g," ").trim();
-    out.push({location:(label?label+", ":"")+pc,time:t?String(Number(t[1])).padStart(2,"0")+":"+t[2]:null});
-    lastBoundary=i+1;
-  }
-  const seen=new Set<string>(); return out.filter(x=>{const k=x.location.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
+  const out:{location:string;time:string|null}[]=[]; let lastBoundary=0;
+  for(let i=0;i<lines.length;i++){const line=lines[i];if(!line){lastBoundary=i+1;continue;}const m=line.match(postcode);if(!m)continue;
+    const pc=m[1].replace(/\s+/g," ").toUpperCase();let marker=-1;
+    for(let j=i;j>=Math.max(lastBoundary,i-6);j--){if(/\b(?:\d{1,2}:?\d{2})hrs?\b/i.test(lines[j])||/\b\d{1,2}:\d{2}\b/.test(lines[j])){marker=j;break;}}
+    let t:RegExpMatchArray|null=marker>=0?lines[marker].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i):null;if(!t&&marker>=0)t=lines[marker].match(/\b(\d{1,2}):(\d{2})\b/);
+    const labelParts:string[]=[];const from=marker>=0?marker+1:Math.max(lastBoundary,i-3);
+    for(let j=from;j<=i;j++){let s=lines[j].replace(/\b\d{1,2}:?\d{2}hrs?\b/ig,"").replace(postcode,"").trim();if(!s||/^(?:1st|2nd|3rd|4th|5th|pick.?up|arrival|departing from there)/i.test(s))continue;if(/^(?:driver|contact names?|glen|jason|rachel|michelle)\b/i.test(s))continue;if(/\b\d{5,}\b/.test(s)&&!/[A-Za-z]{2}\d/.test(s))continue;labelParts.push(s);}
+    const label=labelParts.join(", ").replace(/\s*,\s*,+/g,", ").replace(/\s+/g," ").trim();out.push({location:(label?label+", ":"")+pc,time:t?String(Number(t[1])).padStart(2,"0")+":"+t[2]:null});lastBoundary=i+1;}
+  const seen=new Set<string>();return out.filter(x=>{const k=x.location.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
 }
+function parsePrivateHireRow(r:Record<string,string>,i:number):ParsedDuty{
+  const pickupText=csvValue(r,["pickupinstructions"])??"";
+  const destinationText=csvValue(r,["destinationinstructions"])??"";
+  const stops=instructionStops(pickupText);
+  const destinations=instructionStops(destinationText);
+  const origin=stops[0]?.location??null;
+  const destination=destinations[destinations.length-1]?.location??null;
+  const pickup=time(csvValue(r,["pickupdatetime"]));
+  const leave=time(csvValue(r,["leavetime","leavedatetime","departure"]));
+  const stay=(csvValue(r,["vehicletostay","stay"])??"").toLowerCase()==="true";
+  const returnToDepot=!stay;
+  const intermediate=stops.slice(1).map(s=>({location:s.location,time:s.time,kind:"intermediate" as const}));
+  const routeStops=[...(origin?[{location:origin,time:pickup,kind:"pickup" as const}]:[]),...intermediate,...(destination?[{location:destination,time:null,kind:"destination" as const}]:[])];
+  const vehicleRaw=csvValue(r,["registrationmark","registration","reg"]);
+  const vehicleId=vehicleRaw?.split(/\s+/)[0]?.toUpperCase()??null;
+  const actualSeats=Number(csvValue(r,["actualseats"])||0);
+  const seats=Number(csvValue(r,["seats","capacity","passengers","pax"])||0);
+  return {driver_name:csvValue(r,["drivername"]),vehicle_id:vehicleId,vehicle_type:null,seats:actualSeats||seats,start_time:null,pickup_time:pickup,leave_time:leave,arrival_time:null,finish_time:null,return_leave_time:null,return_arrival_time:null,origin,destination,stay,back:false,return_to_depot:returnToDepot,route_stops:routeStops,raw_text:Object.values(r).join(" | "),sort_order:i+1};
+}
+export function parsePrivateHireCsv(text:string):ParsedDuty[]{return parseCsvRows(text).map(parsePrivateHireRow).filter(d=>Boolean(d.driver_name||d.vehicle_id||d.origin||d.destination||d.pickup_time||d.leave_time));}
+export function isPrivateHireCsv(text:string){const rows=parseCsvRows(text);const h=rows[0]?Object.keys(rows[0]):[];return h.includes("pickupdatetime")&&h.includes("pickupinstructions")&&h.includes("destinationinstructions")&&h.includes("registrationmark");}
+export function parseCoachManagerCsv(text:string):ParsedDuty[]{return parseCsvRows(text).map((r:Record<string,string>,i:number)=>{const seats=Number(csvValue(r,["seats","capacity","passengers","pax"])||0);return {driver_name:csvValue(r,["drivername"]),vehicle_id:(csvValue(r,["registrationmark","registration","reg"])||csvValue(r,["vehicleid","vehicle","fleetnumber"]))?.split(/\s+/)[0]??null,vehicle_type:csvValue(r,["vehicletype"]),seats,start_time:time(csvValue(r,["startdatetime","start","starttime"])),pickup_time:time(csvValue(r,["pickupdatetime","pickuptime","pickup"])),leave_time:time(csvValue(r,["leavedatetime","leave","leavetime","departure"])),arrival_time:time(csvValue(r,["arrivaldatetime","arrival","arrivaltime"])),finish_time:time(csvValue(r,["finishdatetime","finish","finishtime","end","endtime"])),return_leave_time:time(csvValue(r,["returnleavedatetime","returnleave","backleavetime"])),return_arrival_time:time(csvValue(r,["returnarrivaldatetime","returnarrival","backarrivaltime"])),origin:csvValue(r,["pickuppoint","origin","pickupaddress","from","startlocation"]),destination:csvValue(r,["destination","dropoff","dropoffaddress","to","endlocation"]),stay:(csvValue(r,["vehicletostay","stay"])||"").toLowerCase()==="true",back:Boolean(csvValue(r,["backdatetime","back"])),return_to_depot:true,route_stops:[],raw_text:Object.values(r).join(" | "),sort_order:i+1};}).filter((d:ParsedDuty)=>Boolean(d.driver_name||d.vehicle_id||d.origin||d.destination||d.leave_time));}
+export function parseCoachManagerRows(rows:Record<string,unknown>[]):ParsedDuty[]{const norm=(v:string)=>v.toLowerCase().replace(/[^a-z0-9]/g,"");const value=(r:Record<string,unknown>,names:string[])=>{const k=Object.keys(r).find(x=>names.includes(norm(x)));return k?clean(r[k]):null};return rows.map((r,i)=>{const pickupPoint=value(r,["pickuppoint","origin","pickupaddress","from"]);const destination=value(r,["destination","dropoff","dropoffaddress","to"]);const registration=value(r,["registrationmark","registration","reg"]);const vehicleId=(registration||value(r,["vehicleid","vehicle"]))?.split(/\s+/)[0]??null;const startDateTime=value(r,["startdatetime","start","starttime"]);const pickupDateTime=value(r,["pickupdatetime","pickuptime","pickup"]);const leaveDateTime=value(r,["leavedatetime","leave","leavetime","departure"]);const arrivalDateTime=value(r,["arrivaldatetime","arrival","arrivaltime"]);const finishDateTime=value(r,["finishdatetime","finish","finishtime","end","endtime"]);return {driver_name:value(r,["driver","drivername"]),vehicle_id:vehicleId,vehicle_type:value(r,["vehicletype"]),seats:Number(value(r,["seats","capacity","passengers","pax"])||0),start_time:time(startDateTime),pickup_time:time(pickupDateTime),leave_time:time(leaveDateTime),arrival_time:time(arrivalDateTime),finish_time:time(finishDateTime),return_leave_time:time(value(r,["returnleavedatetime","returnleave","backleavetime"])),return_arrival_time:time(value(r,["returnarrivaldatetime","returnarrival","backarrivaltime"])),origin:pickupPoint,destination,stay:(value(r,["vehicletostay","stay"])||"").toLowerCase()==="true",back:Boolean(value(r,["backdatetime","back"])),return_to_depot:true,route_stops:[],raw_text:Object.values(r).map(x=>String(x??"")).join(" | "),sort_order:i+1};}).filter((d:ParsedDuty)=>Boolean(d.origin||d.destination||d.pickup_time));}
