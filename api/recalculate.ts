@@ -72,7 +72,7 @@ export default async function handler(req:any,res:any){
       const wtdTotal=wtdAllocated.reduce((s,o)=>s+(o.wtdAllocated??0),0);
       const actualWtdMinutes=wtdWorkingMinutes(daySpread,opportunities,wtdTotal);
       const wtd=wtdTotal>=wtdTarget?"PASS":"FAIL";
-      const operationalDriving=rows.reduce((total,d,i)=>{let n=total+(i===0?(d.first_position_route_minutes??0):0)+(d.outbound_route_minutes??0);if(i<rows.length-1)n+=d.back?(d.return_route_minutes??0):(d.connection_minutes??0);else n+=d.back?(d.return_route_minutes??0)+(d.depot_return_route_minutes??0):(d.return_route_minutes??0);return n},0);
+      const operationalDriving=rows.reduce((total,d,i)=>{let n=total+(i===0?(d.first_position_route_minutes??0):0)+(d.outbound_route_minutes??0);if(i<rows.length-1)n+=d.back?(d.return_route_minutes??0):(d.connection_minutes??0);else if(d.return_to_depot!==false)n+=d.back?(d.return_route_minutes??0)+(d.depot_return_route_minutes??0):(d.return_route_minutes??0);return n},0);
       const euPlan=planEuDrivingBreaks(dutyTimes,connectionMinutes);
       const euTotal=euPlan.plans.reduce((s,p)=>s+p.minutes,0);
       const euTarget=operationalDriving>270?45:0;
@@ -113,7 +113,7 @@ export default async function handler(req:any,res:any){
         const plannedEu=euPlan.plans.map(p=>`${p.minutes} min ${p.start}–${p.end}`).join(", ");
         const dutyWtdAllocated=dutyBreaks.reduce((s,o)=>s+(o.wtdAllocated??0),0);
         const dutyEuAllocated=dutyBreaks.reduce((s,o)=>s+(o.euAllocated??0),0);
-        const dutyDriving=(i===0?(d.first_position_route_minutes??0):0)+(d.outbound_route_minutes??0)+(d.back?(d.return_route_minutes??0):0)+(i<rows.length-1?(d.connection_minutes??0):(d.back?(d.depot_return_route_minutes??0):(d.return_route_minutes??0)));
+        const dutyDriving=(i===0?(d.first_position_route_minutes??0):0)+(d.outbound_route_minutes??0)+(d.back?(d.return_route_minutes??0):0)+(i<rows.length-1?(d.connection_minutes??0):(d.return_to_depot===false?0:(d.back?(d.depot_return_route_minutes??0):(d.return_route_minutes??0))));
         const dutyEuIssues=euStatus==="FAIL"
           ? [`Driver-day EU/assimilated break requirement: ${euTarget} min; daily plan allocated ${euTotal} min`,euPlan.issue??"Driver reaches 4.5 hours driving before a qualifying break can be completed."]
           : [dutyEuAllocated>0?`This duty carries ${dutyEuAllocated} min of the driver's planned EU/assimilated break allocation`:"No EU/assimilated break allocated on this duty"];
