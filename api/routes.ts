@@ -120,7 +120,7 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
     const batch=remaining.slice(i,i+6);
     const vals=await Promise.all(batch.map(async q=>{
       try{
-        const clean=q.reconst clean=postcodeOf(q)??q.replace(/\b(AM|PM|RUN\d+)\b/gi,"").replace(/[*]/g,"").trim();
+        const clean=postcodeOf(q)??q.replace(/\b(AM|PM|RUN\d+)\b/gi,"").replace(/[*]/g,"").trim();
         const photon=new URL("https://photon.komoot.io/api/");
         photon.searchParams.set("q",clean);photon.searchParams.set("limit","1");photon.searchParams.set("countrycode","GB");
         const pr=await fetchTimeout(photon,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}},4000);
