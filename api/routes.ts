@@ -115,12 +115,12 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
   // For genuine physical locations without a postcode, use one bounded Photon lookup.
   // Do not fall through to multiple external geocoders: an unresolved point must be
   // surfaced as a route warning rather than holding the entire duty batch open.
-  const remaining=locations.filter(q=>!result.has(q)&&!isOperationalLabel(q)&&!postcodeOf(q));
+  const remaining=locations.filter(q=>!result.has(q)&&!isOperationalLabel(q));
   for(let i=0;i<remaining.length;i+=6){
     const batch=remaining.slice(i,i+6);
     const vals=await Promise.all(batch.map(async q=>{
       try{
-        const clean=q.replace(/\b(AM|PM|RUN\d+)\b/gi,"").replace(/[*]/g,"").trim();
+        const clean=q.reconst clean=postcodeOf(q)??q.replace(/\b(AM|PM|RUN\d+)\b/gi,"").replace(/[*]/g,"").trim();
         const photon=new URL("https://photon.komoot.io/api/");
         photon.searchParams.set("q",clean);photon.searchParams.set("limit","1");photon.searchParams.set("countrycode","GB");
         const pr=await fetchTimeout(photon,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}},4000);
