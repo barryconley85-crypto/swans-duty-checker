@@ -67,7 +67,11 @@ const knownLocationPostcodes:Record<string,string>={
   "Altrincham Interchange Bus Stop":"WA14 1EN",
   "Altrincham Inter via Knutsford Bus St":"WA14 1EN",
   "DRIVER** Arcadia Library/Leisure,M19 3PH":"M19 3PH",
-  "DRIVER** Arcadia Librar/Leisure,M19 3PH":"M19 3PH"
+  "DRIVER** Arcadia Librar/Leisure,M19 3PH":"M19 3PH",
+  "The Municipal Hotel, Dale Street, L2 2DH":"L2 2DH",
+  "Altrincham Interchange Bus Stop -70 SEAT":"WA14 1EN",
+  "Vehicle to Travel Master":"M31 4RA",
+  "Vehicle to Travel Master for inspection":"M31 4RA"
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 
@@ -91,13 +95,15 @@ async function geocodePostcodes(postcodes:string[]){
 export async function geocodeMany(locations:string[],key?:string,master:Record<string,string>={}){
   const result=new Map<string,Point>();
   const locationMaster={...knownLocationPostcodes,...master};
+  const normaliseLocation=(q:string)=>q.trim().toLocaleLowerCase().replace(/[.,]/g,"").replace(/\\s+/g," ");
+  const normalisedMaster=new Map(Object.entries(locationMaster).map(([k,v])=>[normaliseLocation(k),v]));
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
     if(isDepotOperationalLabel(q)){const p=postcodeMap.get(depotPostcode);if(p)result.set(q,p);continue;}
     // A Coach Manager service label can still contain a genuine postcode. Use that postcode first.
     // Otherwise operational labels remain intentionally unresolved.
     const normalised=q.trim().replace(/\s+/g," ").replace(/[.,]+$/,"");
-    const pc=locationMaster[q]??locationMaster[normalised]??postcodeOf(q)??null;
+    const pc=locationMaster[q]??locationMaster[normalised]??normalisedMaster.get(normaliseLocation(q))??postcodeOf(q)??null;
     if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
