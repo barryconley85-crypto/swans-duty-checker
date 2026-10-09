@@ -15,7 +15,32 @@ const candidate=clean(g.driver);if(candidate&&!nonDrivers.has(candidate))current
 out.push({driver_name:currentDriver,vehicle_id:vehicleId,vehicle_type:vehicleType||null,seats:Number(g.seats),start_time:time(g.start),pickup_time:time(g.pickup),leave_time:time(ts[1]),arrival_time:time(ts[0]),finish_time:time(ts.length===4?ts[3]:ts[2]),return_leave_time:g.backFlag==="Yes"?time(ts[1]):null,return_arrival_time:g.backFlag==="Yes"&&ts.length===4?time(ts[2]):null,origin:clean(g.origin),destination:clean(g.destination),stay:g.stay==="Yes",back:g.backFlag==="Yes",return_to_depot:true,route_stops:[],raw_text:line,sort_order:out.length+1});}
 return out}
 const csvValue=(row:Record<string,string>,names:string[])=>{const key=Object.keys(row).find(k=>names.includes(k.toLowerCase().replace(/[^a-z0-9]/g,"")));return key?clean(row[key]):null};
-function parseCsvRows(text:string):Record<string,string>[] { const lines=text.replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n").filter((x:string)=>x.trim()); if(lines.length<2)return []; const cells=(line:string)=>{const out:string[]=[];let cur="",quote=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quote&&line[i+1]==='"'){cur+='"';i++;}else quote=!quote;}else if(c===','&&!quote){out.push(cur.trim());cur="";}else cur+=c;}out.push(cur.trim());return out;}; const headers=cells(lines[0]).map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,"")); return lines.slice(1).map(line=>{const vals=cells(line),r:Record<string,string>={};headers.forEach((h,i)=>r[h]=vals[i]??"");return r;}); }
+function parseCsvRows(text:string):Record<string,string>[]{
+  const rows:string[][]=[]; let row:string[]=[], cell="", quote=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(ch==="\\"){
+      cell+=ch;
+      continue;
+    }
+    if(ch==='"'){
+      if(quote&&text[i+1]==='"'){cell+='"';i++;continue;}
+      quote=!quote; continue;
+    }
+    if(ch===','&&!quote){row.push(cell);cell="";continue;}
+    if((ch==='\\n'||ch==='\\r')&&!quote){
+      if(ch==='\\r'&&text[i+1]==='\\n')i++;
+      row.push(cell);cell="";
+      if(row.some(v=>v.trim()!==""))rows.push(row);
+      row=[];continue;
+    }
+    cell+=ch;
+  }
+  if(cell!==""||row.length){row.push(cell);if(row.some(v=>v.trim()!==""))rows.push(row);}
+  if(rows.length<2)return [];
+  const headers=rows[0].map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]/g,""));
+  return rows.slice(1).map(vals=>{const r:Record<string,string>={};headers.forEach((h,i)=>r[h]=(vals[i]??"").trim());return r;});
+}
 const postcode=/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 function instructionStops(text:string|null):{location:string;time:string|null}[]{
   if(!text)return [];
