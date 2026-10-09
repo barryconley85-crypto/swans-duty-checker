@@ -17,19 +17,40 @@ return out}
 const csvValue=(row:Record<string,string>,names:string[])=>{const key=Object.keys(row).find(k=>names.includes(k.toLowerCase().replace(/[^a-z0-9]/g,"")));return key?clean(row[key]):null};
 function parseCsvRows(text:string):Record<string,string>[] { const lines=text.replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n").filter((x:string)=>x.trim()); if(lines.length<2)return []; const cells=(line:string)=>{const out:string[]=[];let cur="",quote=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quote&&line[i+1]==='"'){cur+='"';i++;}else quote=!quote;}else if(c===','&&!quote){out.push(cur.trim());cur="";}else cur+=c;}out.push(cur.trim());return out;}; const headers=cells(lines[0]).map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,"")); return lines.slice(1).map(line=>{const vals=cells(line),r:Record<string,string>={};headers.forEach((h,i)=>r[h]=vals[i]??"");return r;}); }
 const postcode=/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
-function instructionLocations(text:string|null):string[]{if(!text)return [];const lines=String(text).split(/\r?\n/).map(x=>x.replace(/\s+/g," ").trim()).filter(Boolean);const out:string[]=[];for(let i=0;i<lines.length;i++){const m=lines[i].match(postcode);if(!m)continue;const pc=m[1].replace(/\s+/g," ").toUpperCase();const before=lines[i-1]&& !postcode.test(lines[i-1])&&!/^\d{4,}/.test(lines[i-1])&&!/\+?\d[\d ()-]{7,}/.test(lines[i-1])?lines[i-1]:null;out.push(before?before+", "+pc:pc)}return [...new Set(out)]}
+function instructionStops(text:string|null):{location:string;time:string|null}[]{
+  if(!text)return [];
+  const lines=String(text).split(/\\r?\\n/).map(x=>x.replace(/\\s+/g," ").trim()).filter(Boolean);
+  const out:{location:string;time:string|null}[]=[];
+  for(let i=0;i<lines.length;i++){
+    const m=lines[i].match(postcode); if(!m)continue;
+    const pc=m[1].replace(/\\s+/g," ").toUpperCase();
+    let label=lines[i].replace(postcode,"").replace(/[, ]+$/,"").trim();
+    let t=lines[i].match(/\\b(\\d{1,2}):?(\\d{2})hrs?\\b/i);
+    const boundary=Math.max(0,i-4);
+    for(let j=i-1;j>=boundary;j--){
+      if(!t){const tm=lines[j].match(/\\b(\\d{1,2}):?(\\d{2})hrs?\\b/i);if(tm)t=tm;}
+      const candidate=lines[j].replace(/\\b\\d{1,2}:?\\d{2}hrs?\\b/ig,"").trim();
+      if(!label && candidate && !postcode.test(candidate) && !/^\\d/.test(candidate) && !/\\+?\\d[\\d ()-]{7,}/.test(candidate) && !/pick.?up|depart|arrival|transfer/i.test(candidate))label=candidate;
+      if(label)break;
+    }
+    if(!label){for(let j=i-1;j>=boundary;j--){const candidate=lines[j].trim();if(candidate&&!/^\\d/.test(candidate)&&!postcode.test(candidate)&&!/(?:pick.?up|depart|arrival|transfer|contact|driver|client)/i.test(candidate)){label=candidate;break;}}}
+    const tm=t?String(Number(t[1])).padStart(2,"0")+":"+t[2]:null;
+    out.push({location:(label?label+", ":"")+pc,time:tm});
+  }
+  const seen=new Set<string>(); return out.filter(x=>{const k=x.location.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
+}
 function parsePrivateHireRow(r:Record<string,string>,i:number):ParsedDuty{
   const pickupText=csvValue(r,["pickupinstructions"])??"";
   const destinationText=csvValue(r,["destinationinstructions"])??"";
-  const stops=instructionLocations(pickupText);
-  const destinations=instructionLocations(destinationText);
+  const stops=instructionStops(pickupText);
+  const destinations=instructionStops(destinationText);
   const origin=stops[0]??null;
   const destination=destinations[destinations.length-1]??null;
   const pickup=time(csvValue(r,["pickupdatetime"]));
   const leave=time(csvValue(r,["leavetime","leavedatetime","departure"]));
   const stay=(csvValue(r,["vehicletostay","stay"])??"").toLowerCase()==="true";
   const returnToDepot=!stay;
-  const intermediate=stops.slice(1).map(location=>({location,time:null,kind:"intermediate" as const}));
+  const intermediate=stops.slice(1).map(s=>({location:s.location,time:s.time,kind:"intermediate" as const}));
   const routeStops=[...(origin?[{location:origin,time:pickup,kind:"pickup" as const}]:[]),...intermediate,...(destination?[{location:destination,time:null,kind:"destination" as const}]:[])];
   const vehicleRaw=csvValue(r,["registrationmark","registration","reg"]);
   const vehicleId=vehicleRaw?.split(/\s+/)[0]?.toUpperCase()??null;
