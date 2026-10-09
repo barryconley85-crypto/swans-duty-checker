@@ -52,12 +52,10 @@ function instructionStops(text:string|null):{location:string;time:string|null}[]
     let label=lines[i].replace(postcode,"").replace(/[, ]+$/,"").trim();
     let t=lines[i].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i);
     const boundary=Math.max(0,i-5);
+    for(let j=i-1;j>=boundary;j--){if(!t){const tm=lines[j].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i);if(tm)t=tm;}}
     for(let j=i-1;j>=boundary;j--){
-      if(!t){const tm=lines[j].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i);if(tm)t=tm;}
       const candidate=lines[j].replace(/\b\d{1,2}:?\d{2}hrs?\b/ig,"").trim();
-      if(candidate&&!postcode.test(candidate)&&!/^\d/.test(candidate)&&!/^\+?\d[\d ()-]{7,}$/.test(candidate)&&!/(?:pick.?up|depart|arrival|transfer|contact|driver|client|recommendations?)/i.test(candidate)){
-        label=candidate; break;
-      }
+      if(candidate&&!postcode.test(candidate)&&!/^\d/.test(candidate)&&!/^\+?\d[\d ()-]{7,}$/.test(candidate)&&!/(?:pick.?up|depart|arrival|transfer|contact|driver|client|recommendations?)/i.test(candidate)){label=candidate;break;}
     }
     const tm=t?String(Number(t[1])).padStart(2,"0")+":"+t[2]:null;
     out.push({location:(label?label+", ":"")+pc,time:tm});
