@@ -22,7 +22,7 @@ export default async function handler(req:any,res:any){
     const {importId}=req.body??{};if(!importId)return res.status(400).json({error:"importId required"});
     const {data:duties,error}=await db.from("duties").select("*").eq("import_id",importId).order("sort_order");if(error)throw error;
     const allDuties=duties??[];
-    const groups=groupDuties(allDuties);
+    const groups=groupDuties(allDuties,true);
 
     const doubleMannedIds=new Set<string>(),doubleGroups=new Map<string,any[]>();
     for(const d of allDuties){
@@ -95,6 +95,8 @@ export default async function handler(req:any,res:any){
         const calculatedNextArrivalTime=next&&previousEndTime&&nextTravel!=null?addMinutes(previousEndTime,nextTravel):null;
         const calculatedPositionAvailableMinutes=next&&previousEndTime&&next.pickup_time?duration(previousEndTime,next.pickup_time,true):null;
         const issues:string[]=[];
+        if(!d.driver_name)issues.push("Driver name could not be resolved; shift legality can still be screened but a driver must be allocated.");
+        if(!d.vehicle_id)issues.push("Vehicle ID could not be resolved; capacity cannot be verified until a vehicle is allocated.");
         if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");
         else if(d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");
         if(hours==="FAIL")issues.push(isDoubleManned?"Double-manned working day exceeds the configured 21-hour threshold":"Working day exceeds the configured 15-hour screening threshold");
@@ -103,7 +105,8 @@ export default async function handler(req:any,res:any){
         const firstPositionIssue=d.first_position_status==="FAIL"?d.first_position_error:null;if(firstPositionIssue)issues.push(firstPositionIssue);
         const routeWarn=d.route_status==="WARN"||d.route_error;
         const connectionWarn=d.connection_status==="WARN";
-        const dataQuality=d.capacity_status==="WARN"||routeWarn||connectionWarn?"WARN":"PASS";
+        const missingAssignment=!d.driver_name||!d.vehicle_id;
+        const dataQuality=d.capacity_status==="WARN"||routeWarn||connectionWarn||missingAssignment?"WARN":"PASS";
         const overall=d.capacity_status==="FAIL"||hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL"||d.connection_status==="FAIL"||Boolean(firstPositionIssue)?"FAIL":dataQuality==="WARN"?"WARN":"PASS";
         const hoursIssues=hours==="FAIL"?[isDoubleManned?"Double-manned working day exceeds the configured 21-hour screening threshold":"Working day exceeds the configured 15-hour screening threshold"]:[isDoubleManned?"Double-manned duty identified, 21-hour working-day threshold applied":"15-hour single-manned working-day threshold applied"];
         const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities (WTD working time ${actualWtdMinutes} min)`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
