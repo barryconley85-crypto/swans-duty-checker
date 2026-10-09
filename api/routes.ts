@@ -71,7 +71,20 @@ const knownLocationPostcodes:Record<string,string>={
   "The Municipal Hotel, Dale Street, L2 2DH":"L2 2DH",
   "Altrincham Interchange Bus Stop -70 SEAT":"WA14 1EN",
   "Vehicle to Travel Master":"M31 4RA",
-  "Vehicle to Travel Master for inspection":"M31 4RA"
+  "Vehicle to Travel Master for inspection":"M31 4RA",
+  "COACH 1 Wilmslow Train Station":"SK9 1BU",
+  "COACH 2 Wilmslow Train Station":"SK9 1BU",
+  "Wilmslow Train Station -As per timetable":"SK9 1BU",
+  "Wilmslow Train Station - As per timetable":"SK9 1BU",
+  "Wilmslow Train Station-As per timetable":"SK9 1BU",
+  "COACH 1 Alderley Park":"SK10 4TG",
+  "COACH 2 Alderley Park":"SK10 4TG",
+  "Alderley Park - As per timetable":"SK10 4TG",
+  "Altrincham Shuttle Bus":"WA14 1EN",
+  "Cheadle/Bramhall Shuttle Bus":"SK8 1AL",
+  "Route 2 - Cheadle/Bramhall Shuttle Bus":"SK8 1AL",
+  "Route 1 - City Centre Shuttle Bus":"M1 3BB",
+  "The Municipal Hotel, Dale Street, L2 2DH":"L2 2DH"
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 
@@ -104,7 +117,7 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
     // Otherwise operational labels remain intentionally unresolved.
     const normalised=q.trim().replace(/\s+/g," ").replace(/[.,]+$/,"");
     const pc=locationMaster[q]??locationMaster[normalised]??normalisedMaster.get(normaliseLocation(q))??postcodeOf(q)??null;
-    if(pc){const p=postcodeMap.get(pc);if(p)result.set(q,p);}
+    if(pc){const key=String(pc).replace(/\s+/g," ").trim().toUpperCase();const p=postcodeMap.get(key)??postcodeMap.get(String(pc));if(p)result.set(q,p);}
   }
   if(!result.has(depot)){
     const p=postcodeMap.get(depotPostcode);if(p)result.set(depot,p);
