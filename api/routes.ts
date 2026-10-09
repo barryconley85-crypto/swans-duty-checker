@@ -95,7 +95,7 @@ async function geocodePostcodes(postcodes:string[]){
 export async function geocodeMany(locations:string[],key?:string,master:Record<string,string>={}){
   const result=new Map<string,Point>();
   const locationMaster={...knownLocationPostcodes,...master};
-  const normaliseLocation=(q:string)=>q.trim().toLocaleLowerCase().replace(/[.,]/g,"").replace(/\\s+/g," ");
+  const normaliseLocation=(q:string)=>q.trim().toLocaleLowerCase().replace(/[.,]/g,"").replace(/\s+/g," ");
   const normalisedMaster=new Map(Object.entries(locationMaster).map(([k,v])=>[normaliseLocation(k),v]));
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
