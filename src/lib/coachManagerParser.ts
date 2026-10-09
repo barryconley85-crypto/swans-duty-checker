@@ -40,16 +40,25 @@ function parseCsvRows(text:string):Record<string,string>[]{
 const postcode=/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 function instructionStops(text:string|null):{location:string;time:string|null}[]{
   if(!text)return [];
-  const lines=String(text).split(/\r?\n/).map(x=>x.replace(/\s+/g," ").trim());
-  const out:{location:string;time:string|null}[]=[]; let lastBoundary=0;
-  for(let i=0;i<lines.length;i++){const line=lines[i];if(!line){lastBoundary=i+1;continue;}const m=line.match(postcode);if(!m)continue;
-    const pc=m[1].replace(/\s+/g," ").toUpperCase();let marker=-1;
-    for(let j=i;j>=Math.max(lastBoundary,i-6);j--){if(/\b(?:\d{1,2}:?\d{2})hrs?\b/i.test(lines[j])||/\b\d{1,2}:\d{2}\b/.test(lines[j])){marker=j;break;}}
-    let t:RegExpMatchArray|null=marker>=0?lines[marker].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i):null;if(!t&&marker>=0)t=lines[marker].match(/\b(\d{1,2}):(\d{2})\b/);
-    const labelParts:string[]=[];const from=marker>=0?marker+1:Math.max(lastBoundary,i-3);
-    for(let j=from;j<=i;j++){let s=lines[j].replace(/\b\d{1,2}:?\d{2}hrs?\b/ig,"").replace(postcode,"").trim();if(!s||/^(?:1st|2nd|3rd|4th|5th|pick.?up|arrival|departing from there)/i.test(s))continue;if(/^(?:driver|contact names?|glen|jason|rachel|michelle)\b/i.test(s))continue;if(/\b\d{5,}\b/.test(s)&&!/[A-Za-z]{2}\d/.test(s))continue;labelParts.push(s);}
-    const label=labelParts.join(", ").replace(/\s*,\s*,+/g,", ").replace(/\s+/g," ").trim();out.push({location:(label?label+", ":"")+pc,time:t?String(Number(t[1])).padStart(2,"0")+":"+t[2]:null});lastBoundary=i+1;}
-  const seen=new Set<string>();return out.filter(x=>{const k=x.location.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
+  const source=String(text).replace(/\r/g," ").replace(/\n/g," ").replace(/\s+/g," ").trim();
+  const matches=[...source.matchAll(new RegExp(postcode.source,"ig"))];
+  const out:{location:string;time:string|null}[]=[];
+  for(let i=0;i<matches.length;i++){
+    const m=matches[i], start=m.index??0, end=start+m[0].length;
+    let segment=source.slice(i===0?0:(matches[i-1].index??0)+(matches[i-1][0]?.length??0),start).trim();
+    segment=segment.replace(/^.*?(?=(?:\b(?:1st|2nd|3rd|4th|5th|6th|pick.?up|pickup|drop.?off|arrival|destination|depart)\b))/i,"");
+    segment=segment.replace(/\b(?:driver|contact|recommendations?|client|passengers?|all coaches|strictly no alcohol|what3words).*$/i,"").trim();
+    segment=segment.replace(/^(?:1st|2nd|3rd|4th|5th|6th)\s+pick.?up\s*/i,"").replace(/^pick.?up\s*/i,"");
+    segment=segment.replace(/[,;:\-]+$/,"").trim();
+    const timeMatch=segment.match(/\b(\d{1,2}):?(\d{2})hrs?\b/i)||segment.match(/\b(\d{1,2}):(\d{2})\b/);
+    const t=timeMatch?String(Number(timeMatch[1])).padStart(2,"0")+":"+timeMatch[2]:null;
+    segment=segment.replace(/\b\d{1,2}:?\d{2}hrs?\b/ig,"").replace(/\b\d{1,2}:\d{2}\b/g,"").trim();
+    const pc=m[0].replace(/\s+/g," ").toUpperCase();
+    if(!segment && !pc)continue;
+    out.push({location:(segment?segment+", ":"")+pc,time:t});
+  }
+  const seen=new Set<string>();
+  return out.filter(x=>{const k=x.location.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
 }
 function parsePrivateHireRow(r:Record<string,string>,i:number):ParsedDuty{
   const pickupText=csvValue(r,["pickupinstructions"])??"";
