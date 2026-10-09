@@ -137,12 +137,16 @@ async function matrixBatch(edges:Edge[]){
   const idx=(p:Point)=>{const k=pointKey(p);const old=index.get(k);if(old!==undefined)return old;const i=points.length;points.push(p);index.set(k,i);return i};
   const pairs=edges.map(e=>({from:idx(e.from),to:idx(e.to),key:e.key}));
   const sources=[...new Set(pairs.map(p=>p.from))],destinations=[...new Set(pairs.map(p=>p.to))];
+  const orsKey=process.env.OPENROUTESERVICE_API_KEY;
+  if(orsKey){
+    const r=await fetchTimeout("https://api.openrouteservice.org/v2/matrix/driving-car",{method:"POST",headers:{"Content-Type":"application/json","Authorization":orsKey,"User-Agent":"Swans-Duty-Checker/1.0"},body:JSON.stringify({locations:points,sources,destinations,metrics:["duration"],units:"m"})},12000);
+    if(r.ok){const j:any=await r.json();const out=new Map<string,number>();for(const p of pairs){const seconds=j.durations?.[p.from]?.[destinations.indexOf(p.to)];if(seconds!=null)out.set(p.key,Math.ceil(Number(seconds)/60));}if(out.size===pairs.length)return out;}
+  }
   const u=new URL("https://router.project-osrm.org/table/v1/driving/"+points.map(p=>p.join(",")).join(";"));
   u.searchParams.set("sources",sources.join(";"));u.searchParams.set("destinations",destinations.join(";"));u.searchParams.set("annotations","duration");
-  const r=await fetchTimeout(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-  if(!r.ok)throw Error("OSRM matrix failed "+r.status);
-  const j:any=await r.json();if(j.code!=="Ok")throw Error("OSRM matrix returned "+(j.code??"unknown error"));
-  const destIndex=new Map(destinations.map((v,i)=>[v,i]));const out=new Map<string,number>();
+  const r=await fetchTimeout(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}},12000);
+  if(!r.ok)throw Error("Routing matrix failed "+r.status);
+  const j:any=await r.json();if(j.code!=="Ok")throw Error("Routing matrix returned "+(j.code??"unknown error"));const destIndex=new Map(destinations.map((v,i)=>[v,i]));const out=new Map<string,number>();
   for(const p of pairs){const seconds=j.durations?.[sources.indexOf(p.from)]?.[destIndex.get(p.to)!];if(seconds!=null)out.set(p.key,Math.ceil(Number(seconds)/60));}
   return out;
 }
