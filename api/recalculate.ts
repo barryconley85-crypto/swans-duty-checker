@@ -53,7 +53,7 @@ export default async function handler(req:any,res:any){
         if(d.route_status!=="CALCULATED")issues.push("Duty "+d.id+" route is not certified ("+(d.route_status??"NOT_CHECKED")+")");
         if(d.first_position_route_minutes==null&&i===0)issues.push("Duty "+d.id+" is missing depot-to-first route time");
         if(d.outbound_route_minutes==null)issues.push("Duty "+d.id+" is missing outbound route time");
-        if(d.return_route_minutes==null)issues.push("Duty "+d.id+" is missing return route time");
+        if(d.return_to_depot!==false&&d.return_route_minutes==null)issues.push("Duty "+d.id+" is missing return route time");
         if(d.back&&d.depot_return_route_minutes==null)issues.push("Duty "+d.id+" is missing final depot return route time");
         if(i<rows.length-1&&d.connection_status!=="PASS")issues.push("Connection into duty "+rows[i+1].id+" is not certified ("+(d.connection_status??"NOT_CHECKED")+")");
         routeDataIssuesByDuty.set(d.id,issues);
