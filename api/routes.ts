@@ -155,20 +155,27 @@ export async function routeEdges(edges:Edge[]){
   for(let i=0;i<edges.length;i+=20)batches.push(edges.slice(i,i+20));
   for(let i=0;i<batches.length;i+=2){
     const results=await Promise.all(batches.slice(i,i+2).map(async batch=>{
-      try{return await matrixBatch(batch)}catch{
-        const vals=await Promise.all(batch.map(async e=>{
-          try{
-            const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false";
-            const r=await fetchTimeout(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}});
-            if(!r.ok)return null;
-            const j:any=await r.json();const d=j.routes?.[0]?.duration;if(!d)return null;
-            return [e.key,Math.ceil(Number(d)/60)] as const;
-          }catch{return null;}
-        }));
-        return new Map(vals.filter((v):v is [string,number]=>v!==null));
-      }
+      try{return await matrixBatch(batch)}catch{return new Map<string,number>()}
     }));
     for(const m of results)for(const [k,v] of m)out.set(k,v);
+    // Matrix services can return a successful response with missing/unroutable
+    // cells. Retry every missing edge individually so one bad matrix cell does
+    // not turn an otherwise routable duty into a false route warning.
+    const missing=batches.slice(i,i+2).flat().filter(e=>!out.has(e.key));
+    if(missing.length){
+      const vals=await Promise.all(missing.map(async e=>{
+        try{
+          const u="https://router.project-osrm.org/route/v1/driving/"+e.from.join(",")+";"+e.to.join(",")+"?overview=false&steps=false";
+          const r=await fetchTimeout(u,{headers:{"User-Agent":"Swans-Duty-Checker/1.0"}},12000);
+          if(!r.ok)return null;
+          const j:any=await r.json();
+          const d=j.routes?.[0]?.duration;
+          if(d==null)return null;
+          return [e.key,Math.ceil(Number(d)/60)] as const;
+        }catch{return null;}
+      }));
+      for(const v of vals)if(v)out.set(v[0],v[1]);
+    }
   }
   return out;
 }
