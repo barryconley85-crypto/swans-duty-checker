@@ -68,7 +68,7 @@ function parsePrivateHireRow(r:Record<string,string>,i:number):ParsedDuty{
   const stops=instructionStops(pickupText);
   const destinations=instructionStops(destinationText);
   const origin=stops[0]?.location??null;
-  const destination=destinations[destinations.length-1]??null;
+  const destination=destinations[destinations.length-1]?.location??null;
   const pickup=time(csvValue(r,["pickupdatetime"]));
   const leave=time(csvValue(r,["leavetime","leavedatetime","departure"]));
   const stay=(csvValue(r,["vehicletostay","stay"])??"").toLowerCase()==="true";
