@@ -19,21 +19,21 @@ function parseCsvRows(text:string):Record<string,string>[] { const lines=text.re
 const postcode=/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 function instructionStops(text:string|null):{location:string;time:string|null}[]{
   if(!text)return [];
-  const lines=String(text).split(/\\r?\\n/).map(x=>x.replace(/\\s+/g," ").trim()).filter(Boolean);
+  const lines=String(text).split(/\r?\n/).map(x=>x.replace(/\s+/g," ").trim()).filter(Boolean);
   const out:{location:string;time:string|null}[]=[];
   for(let i=0;i<lines.length;i++){
     const m=lines[i].match(postcode); if(!m)continue;
-    const pc=m[1].replace(/\\s+/g," ").toUpperCase();
+    const pc=m[1].replace(/\s+/g," ").toUpperCase();
     let label=lines[i].replace(postcode,"").replace(/[, ]+$/,"").trim();
-    let t=lines[i].match(/\\b(\\d{1,2}):?(\\d{2})hrs?\\b/i);
-    const boundary=Math.max(0,i-4);
+    let t=lines[i].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i);
+    const boundary=Math.max(0,i-5);
     for(let j=i-1;j>=boundary;j--){
-      if(!t){const tm=lines[j].match(/\\b(\\d{1,2}):?(\\d{2})hrs?\\b/i);if(tm)t=tm;}
-      const candidate=lines[j].replace(/\\b\\d{1,2}:?\\d{2}hrs?\\b/ig,"").trim();
-      if(!label && candidate && !postcode.test(candidate) && !/^\\d/.test(candidate) && !/\\+?\\d[\\d ()-]{7,}/.test(candidate) && !/pick.?up|depart|arrival|transfer/i.test(candidate))label=candidate;
-      if(label)break;
+      if(!t){const tm=lines[j].match(/\b(\d{1,2}):?(\d{2})hrs?\b/i);if(tm)t=tm;}
+      const candidate=lines[j].replace(/\b\d{1,2}:?\d{2}hrs?\b/ig,"").trim();
+      if(candidate&&!postcode.test(candidate)&&!/^\d/.test(candidate)&&!/^\+?\d[\d ()-]{7,}$/.test(candidate)&&!/(?:pick.?up|depart|arrival|transfer|contact|driver|client|recommendations?)/i.test(candidate)){
+        label=candidate; break;
+      }
     }
-    if(!label){for(let j=i-1;j>=boundary;j--){const candidate=lines[j].trim();if(candidate&&!/^\\d/.test(candidate)&&!postcode.test(candidate)&&!/(?:pick.?up|depart|arrival|transfer|contact|driver|client)/i.test(candidate)){label=candidate;break;}}}
     const tm=t?String(Number(t[1])).padStart(2,"0")+":"+t[2]:null;
     out.push({location:(label?label+", ":"")+pc,time:tm});
   }
