@@ -91,7 +91,7 @@ export function auditAllocations(duties: AllocationAuditDuty[]): AllocationIssue
       if (!value) continue;
       const key = value.toLocaleLowerCase("en-GB");
       const bucket = byResource.get(key) ?? [];
-      bucket.push(interval);
+      bucket.push(interval, { ...interval, start: interval.start + 1440, end: interval.end + 1440 });
       byResource.set(key, bucket);
     }
 
