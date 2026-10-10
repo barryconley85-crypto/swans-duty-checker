@@ -23,7 +23,7 @@ type Interval = { duty: AllocationAuditDuty; start: number; end: number };
 
 function clockMinutes(value: string | null | undefined): number | null {
   if (!value) return null;
-  const match = value.match(/^(\\d{1,2}):(\\d{2})$/);
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
   if (!match) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
