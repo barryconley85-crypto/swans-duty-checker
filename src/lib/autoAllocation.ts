@@ -56,7 +56,7 @@ type State = {
 };
 
 export const parseClockMinutes = (value: string | null | undefined): number | null => {
-  const match = value?.match(/^(\\d{1,2}):(\\d{2})$/);
+  const match = value?.match(/^(\d{1,2}):(\d{2})$/);
   if (!match) return null;
   const hours = Number(match[1]), minutes = Number(match[2]);
   if (hours > 23 || minutes > 59) return null;
@@ -150,16 +150,17 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
 
   for (const job of jobs) {
     const expanded: State[] = [];
+    const rejectionReasons: string[] = [];
     for (const state of beam) {
       for (const driver of drivers) {
         const driverCheck = checkResource(input, state.driverLast.get(normalise(driver)), job,
           state.driverFirstStart.get(normalise(driver)), `driver "${driver}"`, true);
-        if (!driverCheck.ok) continue;
+        if (!driverCheck.ok) { rejectionReasons.push(driverCheck.reason); continue; }
         for (const vehicle of vehicles) {
-          if (job.seats != null && vehicle.capacity != null && vehicle.capacity < job.seats) continue;
+          if (job.seats != null && vehicle.capacity != null && vehicle.capacity < job.seats) { rejectionReasons.push(`Vehicle "${vehicle.id}" has ${vehicle.capacity} seats but duty ${job.id} needs ${job.seats}.`); continue; }
           const vehicleCheck = checkResource(input, state.vehicleLast.get(normalise(vehicle.id)), job, undefined,
             `vehicle "${vehicle.id}"`, false);
-          if (!vehicleCheck.ok) continue;
+          if (!vehicleCheck.ok) { rejectionReasons.push(vehicleCheck.reason); continue; }
 
           const next = cloneState(state);
           const driverKey = normalise(driver), vehicleKey = normalise(vehicle.id);
@@ -183,7 +184,7 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
         }
       }
       const skipped = cloneState(state);
-      skipped.unallocated.push({ jobId: job.id, reason: "No driver/vehicle combination passed the current capacity, route, turnaround and shift checks." });
+      skipped.unallocated.push({ jobId: job.id, reason: rejectionReasons[0] ?? "No driver/vehicle combination passed the current capacity, route, turnaround and shift checks." });
       expanded.push(skipped);
     }
     expanded.sort((a, b) =>
