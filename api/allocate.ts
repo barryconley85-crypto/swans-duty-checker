@@ -43,7 +43,8 @@ export default async function handler(req: any, res: any) {
       beamWidth: 40,
       jobs: duties.map((d: any) => ({
         id: String(d.id),
-        startTime: d.start_time ?? d.pickup_time,
+        startTime: d.start_time,
+        pickupTime: d.pickup_time,
         endTime: d.finish_time ?? d.calculated_return_position_time ?? d.return_arrival_time ?? d.leave_time,
         origin: d.origin,
         destination: d.destination,
