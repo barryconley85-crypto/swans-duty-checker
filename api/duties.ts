@@ -8,14 +8,14 @@ export default async function handler(_req:any,res:any){
     const {data:imp,error:ie}=await db.from("duty_imports").select("id,filename,page_count,record_count").order("imported_at",{ascending:false}).limit(1).maybeSingle();
     if(ie)throw ie;
     if(!imp)return res.json({importId:null,filename:null,recordCount:0,duties:[]});
-    const {data:duties,error}=await db.from("duties").select("id,driver_name,vehicle_id,origin,destination,pickup_time,leave_time,arrival_time,finish_time,return_leave_time,return_arrival_time,return_arrival_estimated,calculated_return_position_time,calculated_next_arrival_time,calculated_position_travel_minutes,calculated_position_available_minutes,back,arrival_estimated,finish_estimated,seats,vehicle_capacity,capacity_status,hours_status,wtd_status,wtd_issues,overall_status,issues,data_quality_status,duty_minutes,driving_minutes,break_minutes,wtd_minutes,route_status,route_error,outbound_route_minutes,return_route_minutes,depot_return_route_minutes,first_position_route_minutes,first_position_available_minutes,first_position_status,first_position_error,connection_status,connection_error,connection_minutes,connection_available_minutes,break_allocations,wtd_break_allocated_minutes,eu_break_allocated_minutes,eu_break_status,eu_break_issues").eq("import_id",imp.id).order("sort_order");
+    const {data:duties,error}=await db.from("duties").select("id,driver_name,vehicle_id,origin,destination,start_time,pickup_time,leave_time,arrival_time,finish_time,return_leave_time,return_arrival_time,return_arrival_estimated,calculated_return_position_time,calculated_next_arrival_time,calculated_position_travel_minutes,calculated_position_available_minutes,back,arrival_estimated,finish_estimated,seats,vehicle_capacity,capacity_status,hours_status,wtd_status,wtd_issues,overall_status,issues,data_quality_status,duty_minutes,driving_minutes,break_minutes,wtd_minutes,route_status,route_error,outbound_route_minutes,return_route_minutes,depot_return_route_minutes,first_position_route_minutes,first_position_available_minutes,first_position_status,first_position_error,connection_status,connection_error,connection_minutes,connection_available_minutes,break_allocations,wtd_break_allocated_minutes,eu_break_allocated_minutes,eu_break_status,eu_break_issues").eq("import_id",imp.id).order("sort_order");
     if(error)throw error;
     return res.json({
       importId:imp.id,
       filename:imp.filename,
       recordCount:imp.record_count,
       duties:(duties??[]).map(d=>({
-        id:d.id,driverName:d.driver_name,vehicleId:d.vehicle_id,origin:d.origin,destination:d.destination,
+        id:d.id,driverName:d.driver_name,vehicleId:d.vehicle_id,origin:d.origin,destination:d.destination,startTime:d.start_time,
         pickupTime:d.pickup_time,leaveTime:d.leave_time,arrivalTime:d.arrival_time,finishTime:d.finish_time,
         returnLeaveTime:d.return_leave_time,returnArrivalTime:d.return_arrival_time,returnArrivalEstimated:d.return_arrival_estimated,
         calculatedReturnPositionTime:d.calculated_return_position_time,calculatedNextArrivalTime:d.calculated_next_arrival_time,
