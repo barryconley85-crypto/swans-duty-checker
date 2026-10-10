@@ -47,7 +47,7 @@ export default function AllocationBoard({ duties, importId, busy, onRefresh }: P
   };
   const exportCsv = () => {
     const cell = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-    const rows = [["Duty ID","Driver","Vehicle","Origin","Destination","Position time","Passengers","Vehicle capacity","Capacity result","Compliance result"]];
+    const rows: unknown[][] = [["Duty ID","Driver","Vehicle","Origin","Destination","Position time","Passengers","Vehicle capacity","Capacity result","Compliance result"]];
     for (const d of visible) { const v = value(d); rows.push([d.id,v.driver,v.vehicle,d.origin,d.destination,d.pickupTime,d.seats,d.vehicleCapacity,d.capacityStatus,d.overallStatus]); }
     const blob = new Blob(["\uFEFF" + rows.map(r => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "swans-allocation-board.csv"; a.click(); URL.revokeObjectURL(url);
