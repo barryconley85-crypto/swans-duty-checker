@@ -150,6 +150,41 @@ async function matrixBatch(edges:Edge[]){
   for(const p of pairs){const seconds=j.durations?.[sources.indexOf(p.from)]?.[destIndex.get(p.to)!];if(seconds!=null)out.set(p.key,Math.ceil(Number(seconds)/60));}
   return out;
 }
+/** Build a complete travel-time matrix for a bounded set of known physical locations.
+ * Uses one matrix request first; the existing batched/retry route path is the fallback.
+ */
+export async function routeMatrix(locations:string[], master:Record<string,string>={}){
+  const unique=[...new Set(locations.map(x=>String(x??"").trim()).filter(Boolean))];
+  const points=await geocodeMany(unique,process.env.OPENROUTESERVICE_API_KEY,master);
+  const pointList=[...new Set([...points.values()].map(pointKey))].map(k=>k.split(",").map(Number) as Point[]);
+  const edges:Edge[]=[];
+  for(const from of unique){
+    const a=points.get(from);if(!a)continue;
+    for(const to of unique){
+      const b=points.get(to);if(!b)continue;
+      edges.push({key:edgeKey(a,b),from:a,to:b});
+    }
+  }
+  let matrix=new Map<string,number>();
+  if(edges.length){
+    try{matrix=await matrixBatch(edges)}catch{matrix=new Map<string,number>()}
+    if(matrix.size<edges.length){
+      const missing=edges.filter(e=>!matrix.has(e.key));
+      if(missing.length){
+        const retry=await routeEdges(missing);
+        for(const [key,value] of retry)matrix.set(key,value);
+      }
+    }
+  }
+  const result:Record<string,number>={};
+  for(const from of unique)for(const to of unique){
+    const a=points.get(from),b=points.get(to);if(!a||!b)continue;
+    const value=matrix.get(edgeKey(a,b));
+    if(value!==undefined)result[from.trim().toLocaleLowerCase("en-GB")+"|"+to.trim().toLocaleLowerCase("en-GB")]=value;
+  }
+  return {travelMinutes:result,unresolved:unique.filter(x=>!points.has(x)),locationCount:unique.length,edgeCount:edges.length,calculatedEdges:Object.keys(result).length};
+}
+
 export async function routeEdges(edges:Edge[]){
   const out=new Map<string,number>(),batches:Edge[][]=[];
   for(let i=0;i<edges.length;i+=20)batches.push(edges.slice(i,i+20));
