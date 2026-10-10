@@ -1,6 +1,7 @@
 export type AllocationJob = {
   id: string;
   startTime: string | null;
+  pickupTime?: string | null;
   endTime: string | null;
   origin: string | null;
   destination: string | null;
@@ -43,7 +44,7 @@ export type AutoAllocationResult = {
   notes: string[];
 };
 
-type PlacedJob = AllocationJob & { start: number; end: number };
+type PlacedJob = AllocationJob & { start: number; shiftStart: number; end: number };
 type State = {
   assignments: ProposedAssignment[];
   driverLast: Map<string, PlacedJob>;
@@ -92,7 +93,7 @@ function checkResource(
   if (!to) return { ok: false, reason: `Duty ${job.id} has no origin, so repositioning cannot be verified.` };
   const travel = getTravel(input, from, to);
   if (travel === null) return { ok: false, reason: `Missing route estimate from "${from}" to "${to}" for ${resourceName}.` };
-  const available = previous ? forwardSpan(previous.end, job.start) : job.start;
+  const available = previous ? forwardSpan(previous.end, job.start) : Math.max(0, forwardSpan(firstStart ?? job.shiftStart, job.start) - 30);
   if (travel > available) return { ok: false, reason: `${resourceName} cannot reach duty ${job.id}: ${travel} min repositioning, only ${available} min available.` };
   if (previous && previous.end > job.start && forwardSpan(job.start, previous.end) < 720) {
     return { ok: false, reason: `${resourceName} has overlapping duties ${previous.id} and ${job.id}.` };
@@ -119,13 +120,14 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
   const invalid: AllocationRejection[] = [];
 
   for (const raw of input.jobs) {
-    const start = parseClockMinutes(raw.startTime);
+    const shiftStart = parseClockMinutes(raw.startTime);
+    const start = parseClockMinutes(raw.pickupTime ?? raw.startTime);
     const end = parseClockMinutes(raw.endTime);
-    if (start === null || end === null || !raw.origin?.trim() || !raw.destination?.trim()) {
+    if (shiftStart === null || start === null || end === null || !raw.origin?.trim() || !raw.destination?.trim()) {
       invalid.push({ jobId: raw.id, reason: "Missing or invalid start/end time, origin or destination. This duty was not auto-allocated." });
       continue;
     }
-    jobs.push({ ...raw, start, end: end < start ? end + 1440 : end });
+    jobs.push({ ...raw, start, shiftStart, end: end < start ? end + 1440 : end });
   }
   jobs.sort((a, b) => a.start - b.start || a.end - b.end || a.id.localeCompare(b.id));
 
@@ -174,7 +176,7 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
           });
           next.driverLast.set(driverKey, job);
           next.vehicleLast.set(vehicleKey, job);
-          if (!next.driverFirstStart.has(driverKey)) next.driverFirstStart.set(driverKey, job.start);
+          if (!next.driverFirstStart.has(driverKey)) next.driverFirstStart.set(driverKey, job.shiftStart);
           next.deadhead += driverCheck.deadhead + vehicleCheck.deadhead;
           next.changes += changes;
           expanded.push(next);
