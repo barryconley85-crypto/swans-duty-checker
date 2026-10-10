@@ -156,7 +156,6 @@ async function matrixBatch(edges:Edge[]){
 export async function routeMatrix(locations:string[], master:Record<string,string>={}){
   const unique=[...new Set(locations.map(x=>String(x??"").trim()).filter(Boolean))];
   const points=await geocodeMany(unique,process.env.OPENROUTESERVICE_API_KEY,master);
-  const pointList=[...new Set([...points.values()].map(pointKey))].map(k=>k.split(",").map(Number) as Point[]);
   const edges:Edge[]=[];
   for(const from of unique){
     const a=points.get(from);if(!a)continue;
