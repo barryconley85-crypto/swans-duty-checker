@@ -11,7 +11,7 @@ export default async function handler(req: any, res: any) {
     }
     const db = createClient(url, pub, { global: { headers: { "x-duty-checker-key": internal } } });
     const { data: duty, error: dutyError } = await db.from("duties")
-      .select("id,import_id,seats,vehicle_capacity,capacity_status,issues")
+      .select("id,import_id,seats,vehicle_capacity,capacity_status,issues,hours_status,wtd_status,connection_status,data_quality_status")
       .eq("id", dutyId).eq("import_id", importId).maybeSingle();
     if (dutyError) throw dutyError;
     if (!duty) return res.status(404).json({ error: "Duty was not found in the selected import." });
@@ -29,13 +29,15 @@ export default async function handler(req: any, res: any) {
     const issues = [...existingIssues];
     if (capacityStatus === "WARN") issues.push("Vehicle capacity could not be confirmed from the active fleet master");
     if (capacityStatus === "FAIL") issues.push(`Passenger requirement (${seats}) exceeds selected vehicle capacity (${capacity})`);
+    const statuses = [capacityStatus, String(duty.hours_status ?? "WARN"), String(duty.wtd_status ?? "WARN"), String(duty.connection_status ?? "WARN"), String(duty.data_quality_status ?? "WARN")];
+    const overallStatus = statuses.includes("FAIL") ? "FAIL" : statuses.includes("WARN") || statuses.includes("NOT_CHECKED") ? "WARN" : "PASS";
     const { error: updateError } = await db.from("duties").update({
       driver_name: driverName.trim() || null,
       vehicle_id: vehicleId.trim() || null,
       vehicle_capacity: capacity,
       capacity_status: capacityStatus,
       issues,
-      overall_status: capacityStatus === "FAIL" ? "FAIL" : "WARN"
+      overall_status: overallStatus
     }).eq("id", dutyId).eq("import_id", importId);
     if (updateError) throw updateError;
     return res.json({ success: true, dutyId, driverName: driverName.trim() || null, vehicleId: vehicleId.trim() || null, capacity, capacityStatus, message: "Assignment saved. Run the route and compliance checks to refresh connection, hours and WTD results." });
