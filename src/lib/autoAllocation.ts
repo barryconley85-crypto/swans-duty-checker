@@ -93,7 +93,7 @@ function checkResource(
   if (!to) return { ok: false, reason: `Duty ${job.id} has no origin, so repositioning cannot be verified.` };
   const travel = getTravel(input, from, to);
   if (travel === null) return { ok: false, reason: `Missing route estimate from "${from}" to "${to}" for ${resourceName}.` };
-  const available = previous ? forwardSpan(previous.end, job.start) : Math.max(0, forwardSpan(firstStart ?? job.shiftStart, job.start) - 30);
+  const available = previous ? forwardSpan(previous.end, job.start) : job.pickupTime ? Math.max(0, forwardSpan(firstStart ?? job.shiftStart, job.start) - 30) : job.start;
   if (travel > available) return { ok: false, reason: `${resourceName} cannot reach duty ${job.id}: ${travel} min repositioning, only ${available} min available.` };
   if (previous && previous.end > job.start && forwardSpan(job.start, previous.end) < 720) {
     return { ok: false, reason: `${resourceName} has overlapping duties ${previous.id} and ${job.id}.` };
