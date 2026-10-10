@@ -129,13 +129,30 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
     }
     jobs.push({ ...raw, start, shiftStart, end: end < start ? end + 1440 : end });
   }
-  jobs.sort((a, b) => a.start - b.start || a.end - b.end || a.id.localeCompare(b.id));
+  const ambiguousOvernightIds = new Set<string>();
+  for (const overnight of jobs.filter(job => job.end >= 1440)) {
+    const afterMidnightEnd = overnight.end - 1440;
+    for (const other of jobs) {
+      if (other.id !== overnight.id && other.start < afterMidnightEnd) {
+        ambiguousOvernightIds.add(overnight.id);
+        ambiguousOvernightIds.add(other.id);
+      }
+    }
+  }
+  if (ambiguousOvernightIds.size) {
+    for (const id of ambiguousOvernightIds) invalid.push({
+      jobId: id,
+      reason: "A duty crosses midnight and another duty starts in the affected after-midnight window. The source has no service date to determine the correct order, so neither duty was auto-allocated."
+    });
+  }
+  const safeJobs = jobs.filter(job => !ambiguousOvernightIds.has(job.id));
+  safeJobs.sort((a, b) => a.start - b.start || a.end - b.end || a.id.localeCompare(b.id));
 
   const drivers = [...new Set(input.drivers.map(x => x.trim()).filter(Boolean))];
   const vehicles = input.vehicles.filter(v => v.id.trim());
   if (!drivers.length || !vehicles.length) {
     return {
-      assignments: [], unallocated: [...invalid, ...jobs.map(j => ({ jobId: j.id, reason: "No usable driver or vehicle pool was supplied." }))],
+      assignments: [], unallocated: [...invalid, ...safeJobs.map(j => ({ jobId: j.id, reason: "No usable driver or vehicle pool was supplied." }))],
       totalDeadheadMinutes: 0, changedDriverCount: 0, changedVehicleCount: 0, complete: false,
       notes: ["Automatic allocation needs a known driver pool, vehicle pool and route-time estimates."]
     };
@@ -148,7 +165,7 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
   const width = Math.max(1, input.beamWidth ?? 30);
   const changePenalty = input.changePenalty ?? 20;
 
-  for (const job of jobs) {
+  for (const job of safeJobs) {
     const expanded: State[] = [];
     const rejectionReasons: string[] = [];
     for (const state of beam) {
