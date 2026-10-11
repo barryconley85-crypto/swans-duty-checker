@@ -82,6 +82,7 @@ const knownLocationPostcodes:Record<string,string>={
 
 };
 const knownLocationPoints:Record<string,Point>={
+  "McDonalds Entrance to Stockport Rail Station":[-2.163013,53.405538],
   "M62 - Junction 24 Ainley Top":[-1.82789413,53.67126725],
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
