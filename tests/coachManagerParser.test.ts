@@ -8,12 +8,12 @@ it("parses the real Coach Manager CSV structure",()=>{const rows=parseCoachManag
 
 import {parsePrivateHireCsv} from "../src/lib/coachManagerParser";
 it("keeps separately labelled private-hire pickups even when an intermediate stop has no postcode",()=>{
-  const csv='PickupDateTime,PickupInstructions,DestinationInstructions,LeaveTime,DriverName,RegistrationMark,Seats,ActualSeats,VehicleToStay,SingleJourney\n"10/10/2026 08:40:00","1st Pick Up 0840hrs Manchester Abode Hotel 107 Piccadilly Manchester M1 2DB 2nd Pick Up 0900hrs McDonalds Entrance to Stockport Rail Station 3rd pick-up 0930hrs TGI Fridays Prestwich J17 - M60 4TH","Sunderland AFC The Stadium of Light Sunderland SR5 1SU","17:15","Craig Hobin","YD19HGX TM","49","53","False","False"';
+  const csv='PickupDateTime,PickupInstructions,DestinationInstructions,LeaveTime,DriverName,RegistrationMark,Seats,ActualSeats,VehicleToStay,SingleJourney\n"10/10/2026 08:40:00","1st Pick Up 0840hrs Manchester Abode Hotel 107 Piccadilly Manchester M1 2DB 2nd Pick Up 0900hrs McDonalds Entrance to Stockport Rail Station 3rd pick-up 0930hrs TGI Fridays Prestwich J17 - M60 4TH 4th Pick Up 0955hrs M62 - Junction 24 Ainley Top 5th Pick Up 11:10hrs Thirsk Coach Park (departing from there at 12:00hrs)","Sunderland AFC The Stadium of Light Sunderland SR5 1SU","17:15","Craig Hobin","YD19HGX TM","49","53","False","False"';
   const rows=parsePrivateHireCsv(csv);
   expect(rows).toHaveLength(1);
-  expect(rows[0].route_stops.map(s=>s.location)).toHaveLength(4);
+  expect(rows[0].route_stops.map(s=>s.location)).toHaveLength(6);
   expect(rows[0].route_stops[1].location).toContain("McDonalds Entrance to Stockport Rail Station");
-  expect(rows[0].route_stops[2].location).toContain("TGI Fridays");expect(rows[0].single_journey).toBe(false);expect(rows[0].back).toBe(true);expect(rows[0].return_leave_time).toBe("17:15");
+  expect(rows[0].route_stops[2].location).toContain("TGI Fridays");expect(rows[0].route_stops[3].location).toContain("M62 - Junction 24 Ainley Top");expect(rows[0].route_stops[4].location).toBe("Thirsk Coach Park");expect(rows[0].single_journey).toBe(false);expect(rows[0].back).toBe(true);expect(rows[0].return_leave_time).toBe("17:15");
 });
 
 
