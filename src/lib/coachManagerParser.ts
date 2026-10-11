@@ -124,7 +124,7 @@ export function parseCoachManagerCsv(text:string):ParsedDuty[]{
       ? [...parsedPickupStops.map((s,index)=>({location:s.location,time:s.time??(index===0?time(csvValue(r,["pickupdatetime","pickuptime","pickup"])):null),kind:index===0?"pickup" as const:"intermediate" as const})),...(destination?[{location:destination,time:time(csvValue(r,["arrivaldatetime","arrival","arrivaltime"])),kind:"destination" as const}]:[])]
       : [];
     return {
-      driver_name:csvValue(r,["drivername"]),
+      driver_name:driverValue(csvValue(r,["drivername"])),
       vehicle_id:(csvValue(r,["registrationmark","registration","reg"])||csvValue(r,["vehicleid","vehicle","fleetnumber"]))?.split(/\s+/)[0]??null,
       vehicle_type:csvValue(r,["vehicletype","vehicletypedescription"]),
       seats,vehicle_capacity:null,
