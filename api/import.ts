@@ -9,7 +9,7 @@ export default async function handler(req:any,res:any){try{
   const isPdf=upload.buffer.subarray(0,5).toString("ascii")==="%PDF-";const isXlsx=upload.buffer.subarray(0,4).toString("binary")==="PK\\x03\\x04";const isCsv=!isPdf&&!isXlsx;
   let duties,rawText="",pageCount=0,sourceType="coach-manager";
   if(isXlsx){const workbook=XLSX.read(upload.buffer,{type:"buffer",cellDates:true});const sheet=workbook.Sheets[workbook.SheetNames[0]];const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:""});duties=parseCoachManagerRows(rows);rawText=JSON.stringify(rows)}
-  else if(isCsv){rawText=upload.buffer.toString("utf8");const privateHire=isPrivateHireCsv(rawText);sourceType=privateHire?"private-hire-driver-work-detail":"coach-manager";duties=privateHire?parsePrivateHireCsv(rawText):parseCoachManagerCsv(rawText)}
+  else if(isCsv){try{rawText=new TextDecoder("utf-8",{fatal:true}).decode(upload.buffer)}catch{rawText=new TextDecoder("windows-1252").decode(upload.buffer)}const privateHire=isPrivateHireCsv(rawText);sourceType=privateHire?"private-hire-driver-work-detail":"coach-manager";duties=privateHire?parsePrivateHireCsv(rawText):parseCoachManagerCsv(rawText)}
   else{const parsed=await pdfParse(upload.buffer);rawText=parsed.text;pageCount=parsed.numpages;duties=parseCoachManagerText(rawText)}
   if(!duties.length)return res.status(400).json({error:"No duty rows could be extracted"});
   const db=createClient(url,pub,{global:{headers:{"x-duty-checker-key":internal}}}),importId=nanoid();
