@@ -38,7 +38,7 @@ it("retains a physical destination when the supplied postcode is incomplete",()=
 
 import {isPrivateHireCsv} from "../src/lib/coachManagerParser";
 it("classifies the full daily Coach Manager allocation export as Coach Manager, not private hire",()=>{
-  const csv='STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,PICKUPINSTRUCTIONS,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,DESTINATIONINSTRUCTIONS,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPEDESCRIPTION,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\\n"12/10/2026 06:00:00","12/10/2026 06:55:00","Macclesfield Train Station","Sheltered bus stop","False","True","Alderley Park","See timetable","12/10/2026 10:42:00","12/10/2026 10:42:00","12/10/2026 11:30:00","12/10/2026 11:30:00","50","SDSC","YD24EVB AP","YD24EVB AP","027","Jonathan Clinton"';
+  const csv='STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,PICKUPINSTRUCTIONS,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,DESTINATIONINSTRUCTIONS,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPEDESCRIPTION,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\n"12/10/2026 06:00:00","12/10/2026 06:55:00","Macclesfield Train Station","Sheltered bus stop","False","True","Alderley Park","See timetable","12/10/2026 10:42:00","12/10/2026 10:42:00","12/10/2026 11:30:00","12/10/2026 11:30:00","50","SDSC","YD24EVB AP","YD24EVB AP","027","Jonathan Clinton"';
   expect(isPrivateHireCsv(csv)).toBe(false);
   const rows=parseCoachManagerCsv(csv);
   expect(rows).toHaveLength(1);
