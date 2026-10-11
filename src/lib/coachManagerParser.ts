@@ -41,6 +41,29 @@ const postcode=/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 function instructionStops(text:string|null):{location:string;time:string|null}[]{
   if(!text)return [];
   const source=String(text).replace(/\r/g," ").replace(/\n/g," ").replace(/\s+/g," ").trim();
+  // Driver Work Detail notes frequently contain several timed pickups, only some
+  // of which have a postcode. Split on the explicit pickup labels first so one
+  // postcode does not accidentally absorb multiple stops into a single address.
+  const pickupMarkers=[...source.matchAll(/\b(?:\d{1,2}(?:st|nd|rd|th)?\s+)?pick[ -]?up\b/ig)];
+  if(pickupMarkers.length>=2){
+    const parsed:{location:string;time:string|null}[]=[];
+    for(let i=0;i<pickupMarkers.length;i++){
+      const start=pickupMarkers[i].index??0;
+      const end=i+1<pickupMarkers.length?(pickupMarkers[i+1].index??source.length):source.length;
+      let segment=source.slice(start,end).replace(/^\b(?:\d{1,2}(?:st|nd|rd|th)?\s+)?pick[ -]?up\b\s*/i,"").trim();
+      segment=segment.split(/\b(?:contact names?|contact|driver:|strictly no|pax maybe|passengers? may|kick off|after match|client will|all coaches)\b/i)[0].trim();
+      const timeMatch=segment.match(/\b(\d{1,2}):?(\d{2})\s*hrs?\b/i)||segment.match(/\b(\d{1,2}):(\d{2})\b/);
+      const t=timeMatch?String(Number(timeMatch[1])).padStart(2,"0")+":"+timeMatch[2]:null;
+      segment=segment.replace(/\b\d{1,2}:?\d{2}\s*hrs?\b/ig,"").replace(/\b\d{1,2}:\d{2}\b/g,"").trim();
+      const pcMatch=segment.match(new RegExp(postcode.source,"i"));
+      if(pcMatch&&pcMatch.index!==undefined)segment=segment.slice(0,pcMatch.index+pcMatch[0].length);
+      segment=segment.replace(/^[,;:\-]+|[,;:\-]+$/g,"").trim();
+      if(segment)parsed.push({location:segment,time:t});
+    }
+    const seen=new Set<string>();
+    const unique=parsed.filter(x=>{const k=x.location.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
+    if(unique.length>=2)return unique;
+  }
   const matches=[...source.matchAll(new RegExp(postcode.source,"ig"))];
   const out:{location:string;time:string|null}[]=[];
   for(let i=0;i<matches.length;i++){
