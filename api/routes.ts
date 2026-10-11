@@ -77,7 +77,12 @@ const knownLocationPostcodes:Record<string,string>={
   "COACH 2 Alderley Park":"SK10 4TG",
   "Alderley Park - As per timetable":"SK10 4TG",
   "Altrincham Shuttle Bus":"WA14 1EN",
+  "McDonalds Entrance to Stockport Rail Station":"SK3 9HZ",
+  "TGI Fridays Prestwich J17 - M60 4TH":"M25 3BD",
 
+};
+const knownLocationPoints:Record<string,Point>={
+  "M62 - Junction 24 Ainley Top":[-1.82789413,53.67126725],
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 function inferServiceKey(d:any,masterServices:Record<string,string>){const u=(String(d.origin??"")+" | "+String(d.destination??"")).toUpperCase();if(u.includes("ROUTE 2 - CHEADLE/BRAMHALL")||u.includes("ROUTE 2 - THE MANCHESTER GRAMMAR"))return "MGS_CHEADLE_BRAMHALL";if(u.includes("CITY CENTRE SHUTTLE"))return "MGS_CITY_CENTRE";if(u.includes("WORSLEY ROUTE"))return "MGS_WORSLEY";if(u.includes("ALTRINCHAM SCHOOL BUS"))return "MGS_ALTRINCHAM_JUNIORS";if(u.includes("ALTRINCHAM DOUBLE PM"))return "MGS_ALTRINCHAM_SENIORS";if(u.includes("OHGS - R1&2 ROCHDALE"))return "OHGS_R1_R2_ROCHDALE";if(u.includes("OHGS - R3 - DUKINFIELD"))return "OHGS_R3_DUKINFIELD";if(u.includes("OHGS - R4 - SADDLEWORTH"))return "OHGS_R4_SADDLEWORTH";if(u.includes("ST BEDES")){if(u.includes("WORSLEY")||/ST BEDES (?:AM|PM) 1\b/.test(u))return "ST_BEDES_SB1_WORSLEY";if(u.includes("MIDDLETON")||/ST BEDES (?:AM|PM) 2\b/.test(u))return "ST_BEDES_SB2_MIDDLETON";if(u.includes("MOTTRAM/HYDE")||/ST BEDES (?:AM|PM) 3\b/.test(u))return "ST_BEDES_SB3_MOTTRAM_HYDE";if(u.includes("STOCKPORT")||/ST BEDES (?:AM|PM) 4\b/.test(u))return "ST_BEDES_SB4_STOCKPORT";if(u.includes("ALDERLEY EDGE")||/ST BEDES (?:AM|PM) 5\b/.test(u))return "ST_BEDES_SB5_ALDERLEY_EDGE";if(u.includes("HALE")||/ST BEDES (?:AM|PM) 6\b/.test(u))return "ST_BEDES_SB6_HALE";if(u.includes("TIMPERLEY")||/ST BEDES (?:AM|PM) 7\b/.test(u))return "ST_BEDES_SB7_TIMPERLEY";}return masterServices[d.origin]??masterServices[d.destination]??null;}
@@ -100,8 +105,11 @@ export async function geocodeMany(locations:string[],key?:string,master:Record<s
   const locationMaster={...knownLocationPostcodes,...master};
   const normaliseLocation=(q:string)=>q.trim().toLocaleLowerCase().replace(/[.,]/g,"").replace(/\s+/g," ");
   const normalisedMaster=new Map(Object.entries(locationMaster).map(([k,v])=>[normaliseLocation(k),v]));
+  const normalisedPointMaster=new Map(Object.entries(knownLocationPoints).map(([k,v])=>[normaliseLocation(k),v]));
   const postcodeMap=await geocodePostcodes([...new Set([...locations.map(postcodeOf).filter(Boolean) as string[],...Object.values(locationMaster)])]);
   for(const q of locations){
+    const knownPoint=knownLocationPoints[q]??normalisedPointMaster.get(normaliseLocation(q));
+    if(knownPoint){result.set(q,knownPoint);continue;}
     if(isDepotOperationalLabel(q)){const p=postcodeMap.get(depotPostcode);if(p)result.set(q,p);continue;}
     // A Coach Manager service label can still contain a genuine postcode. Use that postcode first.
     // Otherwise operational labels remain intentionally unresolved.
