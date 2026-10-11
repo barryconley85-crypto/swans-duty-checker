@@ -23,6 +23,18 @@ const schema={
   },
   required:["summary","overallRisk","reviewedRows","findings"]
 };
+function safeLocation(value:unknown):string|null{
+  const raw=String(value??"").replace(/\s+/g," ").trim();
+  if(!raw)return null;
+  const postcode=raw.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0]?.toUpperCase()??null;
+  let label=raw
+    .replace(/\b(?:if running late|shuttle\s*id\s*:|username\s*:|password\s*:|login details\s*:|please call|contact (?:the|following)|driver\s*:|driver instructions?\s*:|passenger instructions?\s*:|work ticket notes?\s*:)[\s\S]*$/i,"")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,"")
+    .replace(/(?:\+44\s?\(?0?\)?|\b0)\d(?:[\s().-]*\d){8,}/g,"")
+    .replace(/\s+/g," ").replace(/[ ,;:–—-]+$/g,"").trim();
+  if(postcode&&!new RegExp(postcode.replace(/\s+/g,"\\s*"),"i").test(label))label=(label+" "+postcode).trim();
+  return (label||postcode||"Unresolved location").slice(0,180);
+}
 const timeout=async(input:string,init:RequestInit,ms=30000)=>{
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),ms);
   try{return await fetch(input,{...init,signal:controller.signal})}finally{clearTimeout(timer)}
@@ -59,14 +71,14 @@ export default async function handler(req:any,res:any){
       driverAssigned:Boolean(String(d.driver_name??"").trim())&&!/^(ON HIRE|UNASSIGNED|DEPOT COVER|STANDBY)$/i.test(String(d.driver_name??"").trim()),
       vehicleKey:anonymise(vehicles,d.vehicle_id,"V"),
       vehicleAssigned:Boolean(String(d.vehicle_id??"").trim()),
-      origin:d.origin??null,destination:d.destination??null,
+      origin:safeLocation(d.origin),destination:safeLocation(d.destination),
       startTime:d.start_time??null,pickupTime:d.pickup_time??null,arrivalTime:d.arrival_time??null,
       leaveTime:d.leave_time??null,returnDeparture:d.return_leave_time??null,
       scheduledReturnArrival:d.return_arrival_time??null,finishTime:d.finish_time??null,
       hasReturnJourney:Boolean(d.back),seats:d.seats??null,vehicleCapacity:d.vehicle_capacity??null,
       capacityStatus:d.capacity_status??null,
-      runningBoard:Array.isArray(d.route_stops)?d.route_stops.slice(0,12).map((x:any)=>({location:x.location??null,time:x.time??null,kind:x.kind??null})):[],
-      existingDataWarnings:Array.isArray(d.issues)?d.issues.filter((x:any)=>typeof x==="string").slice(0,5):[],
+      runningBoard:Array.isArray(d.route_stops)?d.route_stops.slice(0,12).map((x:any)=>({location:safeLocation(x.location),time:x.time??null,kind:x.kind??null})):[],
+      existingWarningCount:Array.isArray(d.issues)?d.issues.length:0,
       ...(phase==="results"?{
         routeStatus:d.route_status??null,routeError:d.route_error??null,
         outboundRouteMinutes:d.outbound_route_minutes??null,returnRouteMinutes:d.return_route_minutes??null,
@@ -103,7 +115,7 @@ export default async function handler(req:any,res:any){
         model:process.env.OPENAI_MODEL||"gpt-4.1-mini",
         store:false,
         instructions,
-        input:JSON.stringify({phase,filename:imp.filename,sourceType:imp.source_type,reportedRowCount:imp.record_count,reviewedRowCount:inputRows.length,rows:inputRows}),
+        input:JSON.stringify({phase,sourceType:imp.source_type,reportedRowCount:imp.record_count,reviewedRowCount:inputRows.length,rows:inputRows}),
         text:{format:{type:"json_schema",name:"swans_duty_source_review",strict:true,schema}},
         max_output_tokens:5000
       })
