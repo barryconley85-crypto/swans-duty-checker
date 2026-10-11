@@ -67,6 +67,8 @@ export default async function handler(req:any,res:any){
           const issues:string[]=[];
           if(!d.driver_name)issues.push("Driver name could not be resolved; allocate a named driver before confirming compliance.");
           if(!d.vehicle_id)issues.push("Vehicle ID could not be resolved; allocate a vehicle before confirming capacity.");
+          const importedCapacityUnconfirmed=Array.isArray(d.issues)&&d.issues.some((x:string)=>String(x).includes("imported actual-seat count"));
+          if(importedCapacityUnconfirmed)issues.push("Vehicle capacity is based on the imported actual-seat count; confirm it in the fleet master.");
           if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");
           else if(d.capacity_status==="WARN")issues.push("Vehicle capacity is not confirmed in the fleet master or import.");
           if(d.route_status==="WARN"&&d.route_error)issues.push(d.route_error);
@@ -112,6 +114,8 @@ export default async function handler(req:any,res:any){
         if(!d.vehicle_id)issues.push("Vehicle ID could not be resolved; capacity cannot be verified until a vehicle is allocated.");
         if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");
         else if(d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");
+        const importedCapacityUnconfirmed=Array.isArray(d.issues)&&d.issues.some((x:string)=>String(x).includes("imported actual-seat count"));
+        if(importedCapacityUnconfirmed)issues.push("Vehicle capacity is based on the imported actual-seat count; confirm it in the fleet master.");
         if(hours==="FAIL")issues.push(isDoubleManned?"Double-manned working day exceeds the configured 21-hour threshold":"Working day exceeds the configured 15-hour screening threshold");
         if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);
         if(euStatus==="FAIL")issues.push(euPlan.issue??"Insufficient scheduled EU/assimilated driving-break opportunity");
@@ -119,7 +123,7 @@ export default async function handler(req:any,res:any){
         const routeWarn=d.route_status==="WARN"||d.route_error;
         const connectionWarn=d.connection_status==="WARN";
         const missingAssignment=!d.driver_name||!d.vehicle_id;
-        const dataQuality=d.capacity_status==="WARN"||routeWarn||connectionWarn||missingAssignment?"WARN":"PASS";
+        const dataQuality=d.capacity_status==="WARN"||importedCapacityUnconfirmed||routeWarn||connectionWarn||missingAssignment?"WARN":"PASS";
         const overall=d.capacity_status==="FAIL"||hours==="FAIL"||wtd==="FAIL"||euStatus==="FAIL"||d.connection_status==="FAIL"||Boolean(firstPositionIssue)?"FAIL":dataQuality==="WARN"?"WARN":"PASS";
         const hoursIssues=hours==="FAIL"?[isDoubleManned?"Double-manned working day exceeds the configured 21-hour screening threshold":"Working day exceeds the configured 15-hour screening threshold"]:[isDoubleManned?"Double-manned duty identified, 21-hour working-day threshold applied":"15-hour single-manned working-day threshold applied"];
         const wtdIssues=wtd==="FAIL"?[`Need ${wtdTarget} min WTD break; only ${wtdTotal} min has been allocated from scheduled opportunities (WTD working time ${actualWtdMinutes} min)`]:[`WTD break allocated: ${wtdTotal}/${wtdTarget} min`];
