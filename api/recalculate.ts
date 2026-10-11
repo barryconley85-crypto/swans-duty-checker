@@ -62,7 +62,20 @@ export default async function handler(req:any,res:any){
 
       const isOnHire=String(rows[0]?.driver_name??"").trim().toUpperCase()==="ON HIRE";
       if(isOnHire){for(const d of rows){const issues:string[]=[];if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");else if(d.capacity_status==="WARN")issues.push("Vehicle is not present in capacity master");if(d.route_status==="WARN"&&d.route_error)issues.push(d.route_error);if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);issues.push("Driver is listed as ON HIRE; driver-hours/WTD compliance cannot be attributed to a named driver.");const overall=d.capacity_status==="FAIL"||d.connection_status==="FAIL"?"FAIL":"WARN";await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:["Driver assignment required before driver-hours compliance can be assessed"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:["Driver assignment required before WTD can be assessed"],break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["Driver assignment required before driving-break compliance can be assessed"],issues,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null}).eq("id",d.id);}continue;}
-      if(!starts.length||!finishes.length)continue;
+      if(!starts.length||!finishes.length){
+        for(const d of rows){
+          const issues:string[]=[];
+          if(!d.driver_name)issues.push("Driver name could not be resolved; allocate a named driver before confirming compliance.");
+          if(!d.vehicle_id)issues.push("Vehicle ID could not be resolved; allocate a vehicle before confirming capacity.");
+          if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");
+          else if(d.capacity_status==="WARN")issues.push("Vehicle capacity is not confirmed in the fleet master or import.");
+          if(d.route_status==="WARN"&&d.route_error)issues.push(d.route_error);
+          if(d.connection_status==="FAIL"&&d.connection_error)issues.push(d.connection_error);
+          const overall=d.capacity_status==="FAIL"||d.connection_status==="FAIL"?"FAIL":"WARN";
+          await db.from("duties").update({overall_status:overall,data_quality_status:"WARN",hours_status:"NOT_CHECKED",duty_minutes:null,driving_minutes:null,hours_issues:["Drivers' hours check blocked until valid start and finish times are available"],wtd_status:"NOT_CHECKED",wtd_minutes:null,wtd_issues:["WTD check blocked until valid start and finish times are available"],break_minutes:0,break_allocations:[],wtd_break_allocated_minutes:0,eu_break_allocated_minutes:0,eu_break_status:"NOT_CHECKED",eu_break_issues:["EU/assimilated driving-break check blocked until route and duty times are complete"],issues}).eq("id",d.id);
+        }
+        continue;
+      }
       const daySpread=spread(Math.min(...starts),Math.max(...finishes));
       const hours=daySpread>maxWorkingDay?"FAIL":"PASS";
       const opportunities=scheduledBreakOpportunities(dutyTimes,connectionMinutes);
