@@ -80,19 +80,19 @@ export default async function handler(req:any,res:any){
       runningBoard:Array.isArray(d.route_stops)?d.route_stops.slice(0,12).map((x:any)=>({location:safeLocation(x.location),time:x.time??null,kind:x.kind??null})):[],
       existingWarningCount:Array.isArray(d.issues)?d.issues.length:0,
       ...(phase==="results"?{
-        routeStatus:d.route_status??null,routeError:d.route_error??null,
+        routeStatus:d.route_status??null,routeErrorPresent:Boolean(d.route_error),
         outboundRouteMinutes:d.outbound_route_minutes??null,returnRouteMinutes:d.return_route_minutes??null,
         depotReturnRouteMinutes:d.depot_return_route_minutes??null,firstPositionRouteMinutes:d.first_position_route_minutes??null,
-        firstPositionAvailableMinutes:d.first_position_available_minutes??null,firstPositionStatus:d.first_position_status??null,
+        firstPositionAvailableMinutes:d.first_position_available_minutes??null,firstPositionStatus:d.first_position_status??null,firstPositionErrorPresent:Boolean(d.first_position_error),
         calculatedReturnPositionTime:d.calculated_return_position_time??null,calculatedNextArrivalTime:d.calculated_next_arrival_time??null,
         calculatedPositionTravelMinutes:d.calculated_position_travel_minutes??null,calculatedPositionAvailableMinutes:d.calculated_position_available_minutes??null,
-        connectionStatus:d.connection_status??null,connectionError:d.connection_error??null,
+        connectionStatus:d.connection_status??null,connectionErrorPresent:Boolean(d.connection_error),
         connectionMinutes:d.connection_minutes??null,connectionAvailableMinutes:d.connection_available_minutes??null,
-        hoursStatus:d.hours_status??null,hoursWarnings:d.hours_issues??[],wtdStatus:d.wtd_status??null,wtdWarnings:d.wtd_issues??[],
+        hoursStatus:d.hours_status??null,hoursWarningCount:Array.isArray(d.hours_issues)?d.hours_issues.length:0,wtdStatus:d.wtd_status??null,wtdWarningCount:Array.isArray(d.wtd_issues)?d.wtd_issues.length:0,
         overallStatus:d.overall_status??null,dutyMinutes:d.duty_minutes??null,drivingMinutes:d.driving_minutes??null,
         breakMinutes:d.break_minutes??null,wtdMinutes:d.wtd_minutes??null,breakAllocations:d.break_allocations??[],
         wtdBreakAllocatedMinutes:d.wtd_break_allocated_minutes??0,euBreakAllocatedMinutes:d.eu_break_allocated_minutes??0,
-        euBreakStatus:d.eu_break_status??null,euBreakWarnings:d.eu_break_issues??[]
+        euBreakStatus:d.eu_break_status??null,euBreakWarningCount:Array.isArray(d.eu_break_issues)?d.eu_break_issues.length:0
       }: {})
     }));
     const instructions=[
