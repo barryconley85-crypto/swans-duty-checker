@@ -24,3 +24,11 @@ it("distinguishes a one-way passenger job from a passenger return journey",()=>{
   expect(rows[0].back).toBe(false);
   expect(rows[0].return_to_depot).toBe(true);
 });
+
+
+it("retains a physical destination when the supplied postcode is incomplete",()=>{
+  const csv='PickupDateTime,PickupInstructions,DestinationInstructions,LeaveTime,DriverName,RegistrationMark,Seats,ActualSeats,VehicleToStay,SingleJourney\n"10/10/2026 14:45:00","243 Princess Road Manchester M14 7LT","Canon Medical Arena\nWorksop Rd,\nAttercliffe, Sheffield S9 3T","21:30","Jamie Brown","V18SWA","34","42","False","False"';
+  const rows=parsePrivateHireCsv(csv);
+  expect(rows[0].destination).toContain("Canon Medical Arena");
+  expect(rows[0].destination).toContain("Sheffield S9 3T");
+});
