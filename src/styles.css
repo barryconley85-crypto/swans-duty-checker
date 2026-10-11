@@ -153,3 +153,5 @@ main>section .notice{background:#eef7f2;border-color:#d1e6da;border-left-color:v
 .ai-finding.medium>b{color:#9a6810}
 .ai-finding.low>b{color:#19734a}
 @media(max-width:700px){.actions{width:100%;align-items:stretch}.actions>*{flex:1}.actions .upload{justify-content:center}.import-review .primary-action{width:100%;justify-content:center}.ai-finding{grid-template-columns:1fr}.ai-finding>small{grid-column:1}}
+
+.workflow-guide{display:flex;gap:12px 22px;flex-wrap:wrap;align-items:center;margin:0 0 14px;padding:12px 14px;background:#eaf5fa;border:1px solid #c6e4ef;border-radius:8px;color:#315466;font-size:12px}.workflow-guide>b{font-size:10px;letter-spacing:.1em;color:#087ba8}.workflow-guide strong{color:#075d7e}.workflow-guide span{line-height:1.45}@media(max-width:700px){.workflow-guide{display:grid;gap:7px}}
