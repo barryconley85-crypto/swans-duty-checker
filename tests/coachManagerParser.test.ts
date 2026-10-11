@@ -47,7 +47,7 @@ it("classifies the full daily Coach Manager allocation export as Coach Manager, 
   expect(rows[0].arrival_time).toBe("10:42");
   expect(rows[0].finish_time).toBe("11:30");
   expect(rows[0].vehicle_type).toBe("SDSC");
-  expect(rows[0].return_arrival_time).toBe("11:30");
+  expect(rows[0].return_leave_time).toBe("11:30");expect(rows[0].return_arrival_time).toBeNull();expect(rows[0].single_journey).toBe(false);expect(rows[0].back).toBe(true);
 });
 
 
@@ -60,4 +60,16 @@ it("uses explicit numbered Coach Manager running-board pickups as route stops",(
   expect(rows[0].route_stops[0].time).toBe("07:00");
   expect(rows[0].route_stops[1].time).toBe("07:20");
   expect(rows[0].route_stops[rows[0].route_stops.length-1].kind).toBe("destination");
+});
+
+
+it("flags a return booking whose BACKDATETIME contains a date but no usable time",()=>{
+  const csv='STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPEDESCRIPTION,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\\n"12/10/2026","12/10/2026 09:15:00","Failsworth","False","False","Gallery Oldham","12/10/2026","12/10/2026 12:00:00","12/10/2026","12/10/2026","49","SDSC","LF71DKY TM","LF71DKY TM","027","Martin Williamson"';
+  const rows=parseCoachManagerCsv(csv);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].single_journey).toBe(false);
+  expect(rows[0].back).toBe(true);
+  expect(rows[0].return_leave_time).toBeNull();
+  expect(rows[0].arrival_time).toBeNull();
+  expect(rows[0].finish_time).toBeNull();
 });
