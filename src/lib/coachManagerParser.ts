@@ -38,7 +38,7 @@ function parseCsvRows(text:string):Record<string,string>[]{
   return rows.slice(1).map(vals=>{const r:Record<string,string>={};headers.forEach((h,i)=>r[h]=(vals[i]??"").trim());return r;});
 }
 const postcode=/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
-function instructionStops(text:string|null):{location:string;time:string|null}[]{
+function instructionStops(text:string|null,allowUnpostcoded=false):{location:string;time:string|null}[]{
   if(!text)return [];
   const source=String(text).replace(/\r/g," ").replace(/\n/g," ").replace(/\s+/g," ").trim();
   // Driver Work Detail notes frequently contain several timed pickups, only some
@@ -65,6 +65,12 @@ function instructionStops(text:string|null):{location:string;time:string|null}[]
     if(unique.length>=2)return unique;
   }
   const matches=[...source.matchAll(new RegExp(postcode.source,"ig"))];
+  if(matches.length===0&&allowUnpostcoded){
+    const block=String(text).split(/\r?\n\s*\r?\n/)[0];
+    const lines=block.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,5);
+    let location=lines.join(" ").replace(/\b\d{1,2}:?\d{2}\s*hrs?\b/ig,"").trim();
+    if(location&&!/^(?:pick[ -]?up as per itinerary|please\b|driver:|contact\b|cleaning\b|depot\b|depo\b|route\s*\d|standby\b)/i.test(location))return [{location,time:null}];
+  }
   const out:{location:string;time:string|null}[]=[];
   for(let i=0;i<matches.length;i++){
     const m=matches[i], start=m.index??0, end=start+m[0].length;
@@ -87,7 +93,7 @@ function parsePrivateHireRow(r:Record<string,string>,i:number):ParsedDuty{
   const pickupText=csvValue(r,["pickupinstructions"])??"";
   const destinationText=csvValue(r,["destinationinstructions"])??"";
   const stops=instructionStops(pickupText);
-  const destinations=instructionStops(destinationText);
+  const destinations=instructionStops(destinationText,true);
   const origin=stops[0]?.location??null;
   const destination=destinations[destinations.length-1]?.location??null;
   const pickup=time(csvValue(r,["pickupdatetime"]));
