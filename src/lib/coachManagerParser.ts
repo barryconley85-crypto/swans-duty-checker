@@ -124,7 +124,7 @@ export function parseCoachManagerCsv(text:string):ParsedDuty[]{
       : [];
     return {
       driver_name:csvValue(r,["drivername"]),
-      vehicle_id:(csvValue(r,["registrationmark","registration","reg"])||csvValue(r,["vehicleid","vehicle","fleetnumber"]))?.split(/\\s+/)[0]??null,
+      vehicle_id:(csvValue(r,["registrationmark","registration","reg"])||csvValue(r,["vehicleid","vehicle","fleetnumber"]))?.split(/\s+/)[0]??null,
       vehicle_type:csvValue(r,["vehicletype","vehicletypedescription"]),
       seats,vehicle_capacity:null,
       start_time:time(csvValue(r,["startdatetime","start","starttime"])),
