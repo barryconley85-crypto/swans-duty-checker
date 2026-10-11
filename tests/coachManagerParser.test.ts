@@ -73,3 +73,14 @@ it("flags a return booking whose BACKDATETIME contains a date but no usable time
   expect(rows[0].arrival_time).toBeNull();
   expect(rows[0].finish_time).toBeNull();
 });
+
+
+it("does not treat ON HIRE as a real driver assignment",()=>{
+  const csv='STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPEDESCRIPTION,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\\n"12/10/2026 06:00:00","12/10/2026 06:30:00","Aldermaston Shuttle","False","False","AWE Falcon Gate","12/10/2026 07:00:00","12/10/2026 07:05:00","12/10/2026 07:30:00","12/10/2026 08:00:00","49","SDSC","Stewarts","STEWARTS","SUB","ON HIRE"';
+  const rows=parseCoachManagerCsv(csv);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].driver_name).toBeNull();
+  expect(rows[0].vehicle_id).toBe("STEWARTS");
+  expect(rows[0].back).toBe(true);
+  expect(rows[0].return_leave_time).toBe("07:30");
+});
