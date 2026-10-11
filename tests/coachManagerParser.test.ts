@@ -49,3 +49,15 @@ it("classifies the full daily Coach Manager allocation export as Coach Manager, 
   expect(rows[0].vehicle_type).toBe("SDSC");
   expect(rows[0].return_arrival_time).toBe("11:30");
 });
+
+
+it("uses explicit numbered Coach Manager running-board pickups as route stops",()=>{
+  const csv='STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,PICKUPINSTRUCTIONS,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,DESTINATIONINSTRUCTIONS,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPEDESCRIPTION,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\\n"12/10/2026 06:00:00","12/10/2026 07:00:00","2 x Pick Ups Failsworth & Oldham","1st Pick Up 0700hrs Failsworth M35 9WQ 2nd Pick Up 0720hrs Oldham OL1 1AL","True","False","Gallery Oldham, OL1 1AL","","12/10/2026 08:00:00","12/10/2026 08:00:00","","12/10/2026 08:30:00","49","SDSC","YD24EVB AP","YD24EVB AP","027","Jonathan Clinton"';
+  const rows=parseCoachManagerCsv(csv);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].origin).toContain("Failsworth");
+  expect(rows[0].route_stops.length).toBeGreaterThanOrEqual(3);
+  expect(rows[0].route_stops[0].time).toBe("07:00");
+  expect(rows[0].route_stops[1].time).toBe("07:20");
+  expect(rows[0].route_stops[rows[0].route_stops.length-1].kind).toBe("destination");
+});
