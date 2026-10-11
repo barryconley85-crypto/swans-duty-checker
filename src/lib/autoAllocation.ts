@@ -93,7 +93,8 @@ function checkResource(
   if (!to) return { ok: false, reason: `Duty ${job.id} has no origin, so repositioning cannot be verified.` };
   const travel = getTravel(input, from, to);
   if (travel === null) return { ok: false, reason: `Missing route estimate from "${from}" to "${to}" for ${resourceName}.` };
-  const available = previous ? forwardSpan(previous.end, job.start) : job.pickupTime ? Math.max(0, forwardSpan(firstStart ?? job.shiftStart, job.start) - 30) : job.start;
+  // The first positioning leg must fit after the driver has signed on and completed the required 30-minute vehicle checks. Never treat minutes since midnight as available travel time.
+  const available = previous ? forwardSpan(previous.end, job.start) : Math.max(0, forwardSpan((firstStart ?? job.shiftStart) + 30, job.start));
   if (travel > available) return { ok: false, reason: `${resourceName} cannot reach duty ${job.id}: ${travel} min repositioning, only ${available} min available.` };
   if (previous && previous.end > job.start && forwardSpan(job.start, previous.end) < 720) {
     return { ok: false, reason: `${resourceName} has overlapping duties ${previous.id} and ${job.id}.` };
@@ -185,7 +186,8 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
             Number(Boolean(job.currentVehicle && normalise(job.currentVehicle) !== vehicleKey));
           next.assignments.push({
             jobId: job.id, driver, vehicle: vehicle.id,
-            estimatedDeadheadMinutes: driverCheck.deadhead + vehicleCheck.deadhead,
+            // Dead mileage/time is a vehicle movement. The driver and coach travel together, so do not count the same reposition twice.
+            estimatedDeadheadMinutes: vehicleCheck.deadhead,
             explanation: [
               `Driver reposition: ${driverCheck.deadhead} min from ${state.driverLast.get(driverKey)?.destination ?? input.depot} to ${job.origin}`,
               `Vehicle reposition: ${vehicleCheck.deadhead} min from ${state.vehicleLast.get(vehicleKey)?.destination ?? input.depot} to ${job.origin}`,
@@ -195,7 +197,7 @@ export function autoAllocate(input: AutoAllocationInput): AutoAllocationResult {
           next.driverLast.set(driverKey, job);
           next.vehicleLast.set(vehicleKey, job);
           if (!next.driverFirstStart.has(driverKey)) next.driverFirstStart.set(driverKey, job.shiftStart);
-          next.deadhead += driverCheck.deadhead + vehicleCheck.deadhead;
+          next.deadhead += vehicleCheck.deadhead;
           next.changes += changes;
           expanded.push(next);
         }
