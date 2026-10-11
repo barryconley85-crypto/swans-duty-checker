@@ -34,3 +34,18 @@ it("retains a physical destination when the supplied postcode is incomplete",()=
   expect(rows[0].destination).toContain("Canon Medical Arena");
   expect(rows[0].destination).toContain("Sheffield S9 3T");
 });
+
+
+import {isPrivateHireCsv} from "../src/lib/coachManagerParser";
+it("classifies the full daily Coach Manager allocation export as Coach Manager, not private hire",()=>{
+  const csv='STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,PICKUPINSTRUCTIONS,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,DESTINATIONINSTRUCTIONS,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPEDESCRIPTION,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\\n"12/10/2026 06:00:00","12/10/2026 06:55:00","Macclesfield Train Station","Sheltered bus stop","False","True","Alderley Park","See timetable","12/10/2026 10:42:00","12/10/2026 10:42:00","12/10/2026 11:30:00","12/10/2026 11:30:00","50","SDSC","YD24EVB AP","YD24EVB AP","027","Jonathan Clinton"';
+  expect(isPrivateHireCsv(csv)).toBe(false);
+  const rows=parseCoachManagerCsv(csv);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].start_time).toBe("06:00");
+  expect(rows[0].pickup_time).toBe("06:55");
+  expect(rows[0].arrival_time).toBe("10:42");
+  expect(rows[0].finish_time).toBe("11:30");
+  expect(rows[0].vehicle_type).toBe("SDSC");
+  expect(rows[0].return_arrival_time).toBe("11:30");
+});
