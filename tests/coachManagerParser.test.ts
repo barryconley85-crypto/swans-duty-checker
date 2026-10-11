@@ -13,5 +13,14 @@ it("keeps separately labelled private-hire pickups even when an intermediate sto
   expect(rows).toHaveLength(1);
   expect(rows[0].route_stops.map(s=>s.location)).toHaveLength(4);
   expect(rows[0].route_stops[1].location).toContain("McDonalds Entrance to Stockport Rail Station");
-  expect(rows[0].route_stops[2].location).toContain("TGI Fridays");
+  expect(rows[0].route_stops[2].location).toContain("TGI Fridays");expect(rows[0].single_journey).toBe(false);expect(rows[0].back).toBe(true);expect(rows[0].return_leave_time).toBe("17:15");
+});
+
+
+it("distinguishes a one-way passenger job from a passenger return journey",()=>{
+  const csv='PickupDateTime,PickupInstructions,DestinationInstructions,LeaveTime,DriverName,RegistrationMark,Seats,ActualSeats,VehicleToStay,SingleJourney\n"10/10/2026 08:40:00","Manchester M1 2DB","Sunderland SR5 1SU","17:15","Driver One","YD19HGX","49","53","False","True"';
+  const rows=parsePrivateHireCsv(csv);
+  expect(rows[0].single_journey).toBe(true);
+  expect(rows[0].back).toBe(false);
+  expect(rows[0].return_to_depot).toBe(true);
 });
