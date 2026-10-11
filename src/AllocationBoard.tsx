@@ -43,6 +43,9 @@ export default function AllocationBoard({ duties, importId, busy, onRefresh }: P
       try { body = text ? JSON.parse(text) : null; } catch { body = null; }
       if (!response.ok) throw new Error(body?.error || "Route refresh failed (HTTP " + response.status + ")");
       if (!body || !Number.isFinite(Number(body.processed)) || Number(body.processed) <= 0) throw new Error("Route refresh made no progress at duty " + (offset + 1) + ".");
+      const expectedNext = offset + Number(body.processed);
+      if (body.nextOffset === null && expectedNext < total) throw new Error("Route refresh stopped early after duty " + expectedNext + " of " + total + ".");
+      if (body.nextOffset !== null && Number(body.nextOffset) !== expectedNext) throw new Error("Route refresh returned inconsistent progress.");
       offset = body.nextOffset === null ? total : Number(body.nextOffset);
     }
     for (const path of ["/api/connections", "/api/recalculate"]) {
