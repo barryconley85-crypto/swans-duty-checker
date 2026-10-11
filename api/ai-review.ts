@@ -101,6 +101,7 @@ export default async function handler(req:any,res:any){
       headers:{"Authorization":"Bearer "+apiKey,"Content-Type":"application/json"},
       body:JSON.stringify({
         model:process.env.OPENAI_MODEL||"gpt-4.1-mini",
+        store:false,
         instructions,
         input:JSON.stringify({phase,filename:imp.filename,sourceType:imp.source_type,reportedRowCount:imp.record_count,reviewedRowCount:inputRows.length,rows:inputRows}),
         text:{format:{type:"json_schema",name:"swans_duty_source_review",strict:true,schema}},
