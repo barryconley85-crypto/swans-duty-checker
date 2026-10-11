@@ -64,6 +64,35 @@ describe("autoAllocate", () => {
     expect(result.unallocated.map(x => x.jobId)).toContain("B");
   });
 
+  it("rejects a first duty when depot positioning cannot fit after the 30-minute vehicle check", () => {
+    const result = autoAllocate({
+      jobs: [{ id: "A", startTime: "07:00", pickupTime: "08:00", endTime: "09:00", origin: "School A", destination: "School B" }],
+      drivers: ["Driver 1"],
+      vehicles: [{ id: "Coach 1", capacity: 49 }],
+      depot: "Depot",
+      travelMinutes: {
+        ...routeTimes(["Depot", "School A", "School B"], 10),
+        "depot|school a": 45
+      }
+    });
+    expect(result.complete).toBe(false);
+    expect(result.unallocated.map(x => x.jobId)).toContain("A");
+    expect(result.unallocated[0].reason).toContain("only 30 min available");
+  });
+
+  it("counts each vehicle reposition once in the deadhead objective", () => {
+    const result = autoAllocate({
+      jobs: [{ id: "A", startTime: "06:00", pickupTime: "07:00", endTime: "08:00", origin: "School A", destination: "School B" }],
+      drivers: ["Driver 1"],
+      vehicles: [{ id: "Coach 1", capacity: 49 }],
+      depot: "Depot",
+      travelMinutes: { ...routeTimes(["Depot", "School A", "School B"], 10), "depot|school a": 20 }
+    });
+    expect(result.complete).toBe(true);
+    expect(result.assignments[0].estimatedDeadheadMinutes).toBe(20);
+    expect(result.totalDeadheadMinutes).toBe(20);
+  });
+
   it("does not assume missing route times are zero", () => {
     const result = autoAllocate({
       jobs: [{ id: "A", startTime: "08:00", endTime: "09:00", origin: "Unknown", destination: "School A" }],
