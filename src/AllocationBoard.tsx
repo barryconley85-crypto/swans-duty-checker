@@ -32,18 +32,46 @@ export default function AllocationBoard({ duties, importId, busy, onRefresh }: P
     return true;
   });
   const setValue = (id: string, key: "driver" | "vehicle", next: string) => setDrafts(old => ({ ...old, [id]: { ...value(duties.find(d => d.id === id)!), [key]: next } }));
+  const refreshCompliance = async () => {
+    if (!importId) throw new Error("No import is selected.");
+    let offset = 0;
+    const total = duties.length;
+    while (offset < total) {
+      const response = await fetch("/api/routes", { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store", body: JSON.stringify({ importId, offset, limit: 40 }) });
+      const text = await response.text();
+      let body: any = null;
+      try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+      if (!response.ok) throw new Error(body?.error || "Route refresh failed (HTTP " + response.status + ")");
+      if (!body || !Number.isFinite(Number(body.processed)) || Number(body.processed) <= 0) throw new Error("Route refresh made no progress at duty " + (offset + 1) + ".");
+      offset = body.nextOffset === null ? total : Number(body.nextOffset);
+    }
+    for (const path of ["/api/connections", "/api/recalculate"]) {
+      const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store", body: JSON.stringify({ importId }) });
+      const text = await response.text();
+      let body: any = null;
+      try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+      if (!response.ok) throw new Error(body?.error || path + " failed (HTTP " + response.status + ")");
+    }
+  };
   const save = async (d: BoardDuty) => {
     if (!importId) return;
     const v = value(d); setSaving(d.id); setNotice("");
+    let assignmentSaved = false;
     try {
       const response = await fetch("/api/assign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importId, dutyId: d.id, driverName: v.driver, vehicleId: v.vehicle }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Could not save assignment");
-      setNotice(body.message + (body.capacityStatus === "FAIL" ? " Warning: selected vehicle is too small for this duty." : body.capacityStatus === "WARN" ? " Vehicle capacity is not confirmed." : ""));
+      assignmentSaved = true;
       setDrafts(old => { const next = { ...old }; delete next[d.id]; return next; });
+      setShowEditor(null);
+      setNotice("Assignment saved. Refreshing route and compliance checks…");
+      await refreshCompliance();
       await onRefresh();
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Could not save assignment"); }
-    finally { setSaving(null); }
+      setNotice("Assignment saved; route feasibility, connections, capacity, drivers’ hours and WTD have been refreshed." + (body.capacityStatus === "FAIL" ? " Warning: selected vehicle is too small for this duty." : body.capacityStatus === "WARN" ? " Vehicle capacity is not confirmed." : ""));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Could not save assignment";
+      setNotice(assignmentSaved ? "Assignment was saved, but the compliance refresh did not complete: " + message : message);
+    } finally { setSaving(null); }
   };
   const exportCsv = () => {
     const cell = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
@@ -79,7 +107,7 @@ export default function AllocationBoard({ duties, importId, busy, onRefresh }: P
       </tr>; })}
       {!visible.length && <tr><td colSpan={7} className="board-empty">No duties match this filter.</td></tr>}
     </tbody></table></div>
-    <div className="board-footnote"><AlertTriangle size={16}/><span>Saving updates the driver and vehicle on the imported duty. It recalculates the capacity result only. After making changes, run the route and compliance checks on the Duty overview to refresh school-to-school connections, drivers’ hours and WTD. Driver choices are currently drawn from names in the import; a separate managed driver master and full booking editor are still to be built.</span></div>
+    <div className="board-footnote"><AlertTriangle size={16}/><span>Saving an assignment now reruns route reconstruction, school-to-school feasibility, capacity, drivers’ hours and WTD for the current import. Driver and vehicle choices are drawn from the current import; a managed driver master and full booking editor remain separate enhancements.</span></div>
     <div className="workspace-subheads"><div><Users size={18}/><div><strong>Driver pool</strong><span>{drivers.length} names found in the current report</span></div></div><div><BusFront size={18}/><div><strong>Fleet pool</strong><span>{vehicles.length} vehicles found in the current report</span></div></div></div>
     <div className="workspace-pools"><div>{drivers.map(name => <span key={name}>{name}</span>)}</div><div>{vehicles.map(reg => <span key={reg}>{reg}</span>)}</div></div>
   </div>;
