@@ -23,7 +23,7 @@ const schema={
   },
   required:["summary","overallRisk","reviewedRows","findings"]
 };
-function safeLocation(value:unknown):string|null{
+export function safeLocation(value:unknown):string|null{
   const raw=String(value??"").replace(/\s+/g," ").trim();
   if(!raw)return null;
   const postcode=raw.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0]?.toUpperCase()??null;
