@@ -51,6 +51,7 @@ export default async function handler(req:any,res:any){
       rows.forEach((d,i)=>{
         const issues:string[]=[];
         if(d.route_status!=="CALCULATED")issues.push("Duty "+d.id+" route is not certified ("+(d.route_status??"NOT_CHECKED")+")");
+        if(d.route_error)issues.push(d.route_error);
         if(d.first_position_route_minutes==null&&i===0)issues.push("Duty "+d.id+" is missing depot-to-first route time");
         if(d.outbound_route_minutes==null)issues.push("Duty "+d.id+" is missing outbound route time");
         if(d.return_to_depot!==false&&d.return_route_minutes==null)issues.push("Duty "+d.id+" is missing return route time");
