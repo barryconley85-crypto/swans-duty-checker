@@ -1,7 +1,18 @@
 import {describe,it,expect} from "vitest";
-import {sumCompleteRouteChain,calculateTimedStopArrival,isNonJourneyPlaceholderRow} from "../src/lib/routeChain";
+import {sumCompleteRouteChain,calculateTimedStopArrival,isNonJourneyPlaceholderRow,restoreEstimatedSourceTimes} from "../src/lib/routeChain";
 
 describe("complete route chain validation",()=>{
+  it("clears prior estimates before recalculating so stale times do not become source times",()=>{
+    const duty:any={start_time:"06:12",start_estimated:true,arrival_time:"08:20",arrival_estimated:true,finish_time:"12:00",finish_estimated:false,return_arrival_time:"18:00",return_arrival_estimated:true};
+    const reset=restoreEstimatedSourceTimes(duty);
+    expect(duty.start_time).toBeNull();
+    expect(duty.arrival_time).toBeNull();
+    expect(duty.finish_time).toBe("12:00");
+    expect(duty.return_arrival_time).toBeNull();
+    expect(reset.start_estimated).toBe(false);
+    expect(reset.arrival_estimated).toBe(false);
+    expect(reset.return_arrival_estimated).toBe(false);
+  });
   it("recognizes a non-journey placeholder instead of routing it as a 292-minute trip",()=>{
     expect(isNonJourneyPlaceholderRow("Depot Cover","Depot Cover")).toBe(true);
     expect(isNonJourneyPlaceholderRow("Holiday","Holiday")).toBe(true);
