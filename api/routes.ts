@@ -59,6 +59,7 @@ const knownLocationPostcodes:Record<string,string>={
   "Travel Master":"M31 4RA",
   "Travelmaster":"M31 4RA",
   "Manchester Airport":"M90 1QX",
+  "UNDER 19's Carrington Training Complex":"M31 4BH",
   "Bradley Green Community Primary School":"SK14 4NA",
   "Deva Roman Centre, Chester":"CH1 1NL",
   "Altrincham Interchange Bus Stop":"WA14 1EN",
