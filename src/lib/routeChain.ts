@@ -13,6 +13,13 @@ const clockText = (value: number): string => {
   return String(Math.floor(wrapped / 60)).padStart(2, "0") + ":" + String(wrapped % 60).padStart(2, "0");
 };
 
+/** Identifies rows whose labels are operational placeholders rather than physical journey endpoints. */
+export function isNonJourneyPlaceholderRow(origin: string | null | undefined, destination: string | null | undefined): boolean {
+  const a = String(origin ?? "").trim().toUpperCase();
+  const b = String(destination ?? "").trim().toUpperCase();
+  return a !== "" && a === b && /^(DEPOT COVER|UNASSIGNED|STANDBY|HOLIDAY|SICK|REST DAY|WORK DAY)$/.test(a);
+}
+
 /** Sum a route only when every leg has a real calculated duration. */
 export function sumCompleteRouteChain(keys: string[], durations: ReadonlyMap<string, number>): number {
   if (!keys.length) throw new Error("No physical route legs were available.");
