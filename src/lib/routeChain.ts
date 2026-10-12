@@ -1,7 +1,7 @@
 export type RouteStopTime = { location: string; time: string | null };
 
 const clockMinutes = (value: string | null | undefined): number | null => {
-  const match = value?.match(/^(\\d{2}):(\\d{2})$/);
+  const match = value?.match(/^(\d{2}):(\d{2})$/);
   if (!match) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
