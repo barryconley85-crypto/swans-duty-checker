@@ -13,6 +13,26 @@ const clockText = (value: number): string => {
   return String(Math.floor(wrapped / 60)).padStart(2, "0") + ":" + String(wrapped % 60).padStart(2, "0");
 };
 
+/** Restores missing source times before rerunning routing, so old estimates never become permanent source data. */
+export function restoreEstimatedSourceTimes(duty: any): Record<string, any> {
+  const reset: Record<string, any> = {};
+  const fields = [
+    ["start_time", "start_estimated"],
+    ["arrival_time", "arrival_estimated"],
+    ["finish_time", "finish_estimated"],
+    ["return_arrival_time", "return_arrival_estimated"],
+  ];
+  for (const [timeField, flagField] of fields) {
+    if (duty[flagField] === true) {
+      duty[timeField] = null;
+      duty[flagField] = false;
+      reset[timeField] = null;
+      reset[flagField] = false;
+    }
+  }
+  return reset;
+}
+
 /** Identifies rows whose labels are operational placeholders rather than physical journey endpoints. */
 export function isNonJourneyPlaceholderRow(origin: string | null | undefined, destination: string | null | undefined): boolean {
   const a = String(origin ?? "").trim().toUpperCase();
