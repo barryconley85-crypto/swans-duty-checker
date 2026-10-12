@@ -1,7 +1,12 @@
 import {describe,it,expect} from "vitest";
-import {sumCompleteRouteChain,calculateTimedStopArrival} from "../src/lib/routeChain";
+import {sumCompleteRouteChain,calculateTimedStopArrival,isNonJourneyPlaceholderRow} from "../src/lib/routeChain";
 
 describe("complete route chain validation",()=>{
+  it("recognizes a non-journey placeholder instead of routing it as a 292-minute trip",()=>{
+    expect(isNonJourneyPlaceholderRow("Depot Cover","Depot Cover")).toBe(true);
+    expect(isNonJourneyPlaceholderRow("Holiday","Holiday")).toBe(true);
+    expect(isNonJourneyPlaceholderRow("Depot","School")).toBe(false);
+  });
   it("sums all legs only when every leg has a calculated duration",()=>{
     expect(sumCompleteRouteChain(["a","b","c"],new Map([["a",10],["b",12],["c",8]]))).toBe(30);
   });
