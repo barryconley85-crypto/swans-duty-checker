@@ -91,14 +91,25 @@ for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 function inferServiceKey(d:any,masterServices:Record<string,string>){const u=(String(d.origin??"")+" | "+String(d.destination??"")).toUpperCase();if(u.includes("ROUTE 2 - CHEADLE/BRAMHALL")||u.includes("ROUTE 2 - THE MANCHESTER GRAMMAR"))return "MGS_CHEADLE_BRAMHALL";if(u.includes("CITY CENTRE SHUTTLE"))return "MGS_CITY_CENTRE";if(u.includes("WORSLEY ROUTE"))return "MGS_WORSLEY";if(u.includes("ALTRINCHAM SCHOOL BUS"))return "MGS_ALTRINCHAM_JUNIORS";if(u.includes("ALTRINCHAM DOUBLE PM"))return "MGS_ALTRINCHAM_SENIORS";if(u.includes("OHGS - R1&2 ROCHDALE"))return "OHGS_R1_R2_ROCHDALE";if(u.includes("OHGS - R3 - DUKINFIELD"))return "OHGS_R3_DUKINFIELD";if(u.includes("OHGS - R4 - SADDLEWORTH"))return "OHGS_R4_SADDLEWORTH";if(u.includes("ST BEDES")){if(u.includes("WORSLEY")||/ST BEDES (?:AM|PM) 1\b/.test(u))return "ST_BEDES_SB1_WORSLEY";if(u.includes("MIDDLETON")||/ST BEDES (?:AM|PM) 2\b/.test(u))return "ST_BEDES_SB2_MIDDLETON";if(u.includes("MOTTRAM/HYDE")||/ST BEDES (?:AM|PM) 3\b/.test(u))return "ST_BEDES_SB3_MOTTRAM_HYDE";if(u.includes("STOCKPORT")||/ST BEDES (?:AM|PM) 4\b/.test(u))return "ST_BEDES_SB4_STOCKPORT";if(u.includes("ALDERLEY EDGE")||/ST BEDES (?:AM|PM) 5\b/.test(u))return "ST_BEDES_SB5_ALDERLEY_EDGE";if(u.includes("HALE")||/ST BEDES (?:AM|PM) 6\b/.test(u))return "ST_BEDES_SB6_HALE";if(u.includes("TIMPERLEY")||/ST BEDES (?:AM|PM) 7\b/.test(u))return "ST_BEDES_SB7_TIMPERLEY";}return masterServices[d.origin]??masterServices[d.destination]??null;}
 async function geocodePostcodes(postcodes:string[]){
   const out=new Map<string,Point>();
+  const requestBatch=async(batch:string[])=>{
+    try{
+      const r=await fetchTimeout("https://api.postcodes.io/postcodes",{method:"POST",headers:{"Content-Type":"application/json","User-Agent":"Swans-Duty-Checker/1.0"},body:JSON.stringify({postcodes:batch})},10000);
+      if(!r.ok)return false;
+      const j:any=await r.json();
+      for(const item of j.result??[]){
+        const p=item.result;
+        if(p?.longitude!=null&&p?.latitude!=null)out.set(item.query.replace(/\s+/g," ").toUpperCase(),[Number(p.longitude),Number(p.latitude)]);
+      }
+      return true;
+    }catch{return false;}
+  };
   for(let i=0;i<postcodes.length;i+=100){
     const batch=postcodes.slice(i,i+100);
-    const r=await fetchTimeout("https://api.postcodes.io/postcodes",{method:"POST",headers:{"Content-Type":"application/json","User-Agent":"Swans-Duty-Checker/1.0"},body:JSON.stringify({postcodes:batch})});
-    if(!r.ok)continue;
-    const j:any=await r.json();
-    for(const item of j.result??[]){
-      const p=item.result;
-      if(p?.longitude!=null&&p?.latitude!=null)out.set(item.query.replace(/\s+/g," ").toUpperCase(),[Number(p.longitude),Number(p.latitude)]);
+    const ok=await requestBatch(batch);
+    const missing=batch.filter(pc=>!out.has(pc.replace(/\s+/g," ").toUpperCase()));
+    // A transient bulk lookup failure must not turn a whole group of valid postcodes into false route warnings.
+    if(!ok||missing.length){
+      for(let j=0;j<missing.length;j+=10)await requestBatch(missing.slice(j,j+10));
     }
   }
   return out;
