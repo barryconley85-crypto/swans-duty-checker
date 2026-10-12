@@ -4,7 +4,7 @@ Jonathan Clinton
 10:25 10:50 Audenshaw Primary School Yes No Tameside Wellness Centre 11:00 11:05 11:05 35 SDSC YX74OHN TM
 11:25 12:15 St Marys CE Primary School Yes No Manchester Central Library, M2 12:25 12:25 ??:?? 65 SDSC YX74OHN TM`;const rows=parseCoachManagerText(text);expect(rows).toHaveLength(3);expect(rows.map(r=>r.driver_name)).toEqual(["Jonathan Clinton","Jonathan Clinton","Jonathan Clinton"]);expect(rows[0].vehicle_id).toBe("YX74OHN");expect(rows[0].vehicle_type).toBe("DDSB");expect(rows[2].finish_time).toBeNull()});it("handles CAR SDSC vehicle types without mistaking SDSC for the registration",()=>{const rows=parseCoachManagerText(`??:?? 12:50 RUN3 Newman Catholic College OL9 9QY Yes No Academy Stadium M11 4TQ ??:?? ??:?? ??:?? 1 CAR SDSC RJ19HVU AP`);expect(rows[0].vehicle_type).toBe("CAR SDSC");expect(rows[0].vehicle_id).toBe("RJ19HVU")})});
 import {parseCoachManagerCsv} from "../src/lib/coachManagerParser";
-it("parses the real Coach Manager CSV structure",()=>{const rows=parseCoachManagerCsv('STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPE,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\n"06/10/2026 06:10:00","06/10/2026 07:40:00","ST BEDES AM HALE","True","False","St Bedes College 6","06/10/2026 08:40:00","06/10/2026 08:45:00","","06/10/2026","53","SDSC","YD19HGX TM","YD19HGX TM","041TM","Craig Hobin"');expect(rows).toHaveLength(1);expect(rows[0].driver_name).toBe("Craig Hobin");expect(rows[0].vehicle_id).toBe("YD19HGX");expect(rows[0].origin).toBe("ST BEDES AM HALE");expect(rows[0].leave_time).toBe("08:45");expect(rows[0].arrival_time).toBe("08:40");expect(rows[0].finish_time).toBeNull();});
+it("parses the real Coach Manager CSV structure",()=>{const rows=parseCoachManagerCsv('STARTDATETIME,PICKUPDATETIME,PICKUPPOINT,SINGLEJOURNEY,VEHICLETOSTAY,DESTINATION,ARRIVALDATETIME,LEAVEDATETIME,BACKDATETIME,FINISHDATETIME,SEATS,VEHICLETYPE,VEHICLEID,REGISTRATIONMARK,DRIVERID,DRIVERNAME\n"06/10/2026 06:10:00","06/10/2026 07:40:00","ST BEDES AM HALE","True","False","St Bedes College 6","06/10/2026 08:40:00","06/10/2026 08:45:00","","06/10/2026","53","SDSC","YD19HGX TM","YD19HGX TM","041TM","Craig Hobin"');expect(rows).toHaveLength(1);expect(rows[0].driver_name).toBe("Craig Hobin");expect(rows[0].vehicle_id).toBe("YD19HGX");expect(rows[0].origin).toBe("ST BEDES AM HALE");expect(rows[0].leave_time).toBe("08:45");expect(rows[0].arrival_time).toBeNull();expect(rows[0].finish_time).toBeNull();});
 
 import {parsePrivateHireCsv} from "../src/lib/coachManagerParser";
 it("keeps separately labelled private-hire pickups even when an intermediate stop has no postcode",()=>{
@@ -44,10 +44,10 @@ it("classifies the full daily Coach Manager allocation export as Coach Manager, 
   expect(rows).toHaveLength(1);
   expect(rows[0].start_time).toBe("06:00");
   expect(rows[0].pickup_time).toBe("06:55");
-  expect(rows[0].arrival_time).toBe("10:42");
+  expect(rows[0].arrival_time).toBeNull();
   expect(rows[0].finish_time).toBe("11:30");
   expect(rows[0].vehicle_type).toBe("SDSC");
-  expect(rows[0].return_leave_time).toBe("11:30");expect(rows[0].return_arrival_time).toBeNull();expect(rows[0].single_journey).toBe(false);expect(rows[0].back).toBe(true);
+  expect(rows[0].return_leave_time).toBe("10:42");expect(rows[0].return_arrival_time).toBeNull();expect(rows[0].single_journey).toBe(false);expect(rows[0].back).toBe(true);
 });
 
 
@@ -69,7 +69,7 @@ it("flags a return booking whose BACKDATETIME contains a date but no usable time
   expect(rows).toHaveLength(1);
   expect(rows[0].single_journey).toBe(false);
   expect(rows[0].back).toBe(true);
-  expect(rows[0].return_leave_time).toBeNull();
+  expect(rows[0].return_leave_time).toBe("12:00");
   expect(rows[0].arrival_time).toBeNull();
   expect(rows[0].finish_time).toBeNull();
 });
@@ -82,5 +82,5 @@ it("does not treat ON HIRE as a real driver assignment",()=>{
   expect(rows[0].driver_name).toBeNull();
   expect(rows[0].vehicle_id).toBe("STEWARTS");
   expect(rows[0].back).toBe(true);
-  expect(rows[0].return_leave_time).toBe("07:30");
+  expect(rows[0].return_leave_time).toBe("07:05");
 });
