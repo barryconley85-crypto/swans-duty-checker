@@ -1,6 +1,6 @@
 import {createClient} from "@supabase/supabase-js";
 import {groupDuties} from "../src/lib/dutySequence.js";
-import {sumCompleteRouteChain,calculateTimedStopArrival} from "../src/lib/routeChain.js";
+import {sumCompleteRouteChain,calculateTimedStopArrival,isNonJourneyPlaceholderRow} from "../src/lib/routeChain.js";
 const depot="Swans Travel, Broadgate, Chadderton, OL9 9XA";
 const depotPostcode="OL9 9XA";
 type Point=[number,number];
@@ -60,6 +60,8 @@ const knownLocationPostcodes:Record<string,string>={
   "Travelmaster":"M31 4RA",
   "Manchester Airport":"M90 1QX",
   "UNDER 19's Carrington Training Complex":"M31 4BH",
+  "Macclesfield College MON-WED PM":"SK11 8LF",
+  "Delta Hotels by Marriott Liverpool City":"L1 1RH",
   "Bradley Green Community Primary School":"SK14 4NA",
   "Deva Roman Centre, Chester":"CH1 1NL",
   "Altrincham Interchange Bus Stop":"WA14 1EN",
@@ -86,6 +88,9 @@ const knownLocationPostcodes:Record<string,string>={
 const knownLocationPoints:Record<string,Point>={
   "McDonalds Entrance to Stockport Rail Station":[-2.163013,53.405538],
   "M62 - Junction 24 Ainley Top":[-1.82789413,53.67126725],
+  "Altrincham Shuttle Bus":[-2.347158,53.387668],
+  "Altrincham Interchange Bus Stop -70 SEAT":[-2.347158,53.387668],
+  "Altrincham Inter via Knutsford Bus St":[-2.347158,53.387668],
 };
 for(let i=1;i<=7;i++)knownLocationPostcodes[`St Bedes College ${i}`]="M16 8HX";
 function inferServiceKey(d:any,masterServices:Record<string,string>){const u=(String(d.origin??"")+" | "+String(d.destination??"")).toUpperCase();if(u.includes("ROUTE 2 - CHEADLE/BRAMHALL")||u.includes("ROUTE 2 - THE MANCHESTER GRAMMAR"))return "MGS_CHEADLE_BRAMHALL";if(u.includes("CITY CENTRE SHUTTLE"))return "MGS_CITY_CENTRE";if(u.includes("WORSLEY ROUTE"))return "MGS_WORSLEY";if(u.includes("ALTRINCHAM SCHOOL BUS"))return "MGS_ALTRINCHAM_JUNIORS";if(u.includes("ALTRINCHAM DOUBLE PM"))return "MGS_ALTRINCHAM_SENIORS";if(u.includes("OHGS - R1&2 ROCHDALE"))return "OHGS_R1_R2_ROCHDALE";if(u.includes("OHGS - R3 - DUKINFIELD"))return "OHGS_R3_DUKINFIELD";if(u.includes("OHGS - R4 - SADDLEWORTH"))return "OHGS_R4_SADDLEWORTH";if(u.includes("ST BEDES")){if(u.includes("WORSLEY")||/ST BEDES (?:AM|PM) 1\b/.test(u))return "ST_BEDES_SB1_WORSLEY";if(u.includes("MIDDLETON")||/ST BEDES (?:AM|PM) 2\b/.test(u))return "ST_BEDES_SB2_MIDDLETON";if(u.includes("MOTTRAM/HYDE")||/ST BEDES (?:AM|PM) 3\b/.test(u))return "ST_BEDES_SB3_MOTTRAM_HYDE";if(u.includes("STOCKPORT")||/ST BEDES (?:AM|PM) 4\b/.test(u))return "ST_BEDES_SB4_STOCKPORT";if(u.includes("ALDERLEY EDGE")||/ST BEDES (?:AM|PM) 5\b/.test(u))return "ST_BEDES_SB5_ALDERLEY_EDGE";if(u.includes("HALE")||/ST BEDES (?:AM|PM) 6\b/.test(u))return "ST_BEDES_SB6_HALE";if(u.includes("TIMPERLEY")||/ST BEDES (?:AM|PM) 7\b/.test(u))return "ST_BEDES_SB7_TIMPERLEY";}return masterServices[d.origin]??masterServices[d.destination]??null;}
@@ -270,6 +275,11 @@ export default async function handler(req:any,res:any){
         calculated_return_position_time:null,calculated_next_arrival_time:null,calculated_position_travel_minutes:null,calculated_position_available_minutes:null,
         connection_status:"NOT_CHECKED",connection_error:null,connection_minutes:null,connection_available_minutes:null
       }).eq("id",d.id);
+      if(isNonJourneyPlaceholderRow(d.origin,d.destination)){
+        sourceTimingErrors.set(d.id,null);
+        await db.from("duties").update({route_status:"WARN",route_error:"Non-journey placeholder row; no physical route is specified. Routing is skipped and the row remains visible for review."}).eq("id",d.id);
+        continue;
+      }
       const pickupM=mins(d.pickup_time),leaveM=mins(d.leave_time),arrivalM=mins(d.arrival_time);
       const sourceTimingError=arrivalM!==null&&leaveM!==null&&leaveM<arrivalM
         ? `Invalid source timing: Leave ${d.leave_time} is before Arrival ${d.arrival_time}; waiting/rest cannot be calculated.`
