@@ -121,7 +121,7 @@ export function parseCoachManagerCsv(text:string):ParsedDuty[]{
     const hasRunningBoard=parsedPickupStops.length>=2;
     const origin=hasRunningBoard?parsedPickupStops[0].location:pickupPoint;
     const routeStops:RouteStop[]=hasRunningBoard
-      ? [...parsedPickupStops.map((s,index)=>({location:s.location,time:s.time??(index===0?time(csvValue(r,["pickupdatetime","pickuptime","pickup"])):null),kind:index===0?"pickup" as const:"intermediate" as const})),...(destination?[{location:destination,time:time(csvValue(r,["arrivaldatetime","arrival","arrivaltime"])),kind:"destination" as const}]:[])]
+      ? [...parsedPickupStops.map((s,index)=>({location:s.location,time:s.time??(index===0?time(csvValue(r,["pickupdatetime","pickuptime","pickup"])):null),kind:index===0?"pickup" as const:"intermediate" as const})),...(destination?[{location:destination,time:null,kind:"destination" as const}]:[])]
       : [];
     return {
       driver_name:driverValue(csvValue(r,["drivername"])),
@@ -131,12 +131,12 @@ export function parseCoachManagerCsv(text:string):ParsedDuty[]{
       start_time:time(csvValue(r,["startdatetime","start","starttime"])),
       pickup_time:time(csvValue(r,["pickupdatetime","pickuptime","pickup"])),
       leave_time:time(csvValue(r,["leavedatetime","leave","leavetime","departure"])),
-      arrival_time:time(csvValue(r,["arrivaldatetime","arrival","arrivaltime"])),
+      arrival_time:null,
       finish_time:time(csvValue(r,["finishdatetime","finish","finishtime","end","endtime"])),
-      // Coach Manager BACKDATETIME is the scheduled return-leg departure.
-      // A date-only value remains unresolved rather than becoming a false time.
-      return_leave_time:time(csvValue(r,["backdatetime","returnleavedatetime","returnleave","backleavetime"])),
-      return_arrival_time:time(csvValue(r,["returnarrivaldatetime","returnarrival","backarrivaltime"])),
+      // The passenger journey departure (LEAVEDATETIME) is the return-leg start.
+      // Ignore ARRIVALDATETIME and BACKDATETIME: both are unreliable for route calculations.
+      return_leave_time:time(csvValue(r,["leavedatetime","leave","leavetime","departure"])),
+      return_arrival_time:null,
       origin,destination,
       stay:(csvValue(r,["vehicletostay","stay"])||"").toLowerCase()==="true",
       back:(csvValue(r,["singlejourney"])||"").toLowerCase()==="false",
