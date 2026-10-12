@@ -109,7 +109,7 @@ export default async function handler(req:any,res:any){
         const nextTravel=d.connection_minutes??null;
         const calculatedNextArrivalTime=next&&previousEndTime&&nextTravel!=null?addMinutes(previousEndTime,nextTravel):null;
         const calculatedPositionAvailableMinutes=next&&previousEndTime&&next.pickup_time?duration(previousEndTime,next.pickup_time,true):null;
-        const issues:string[]=[];
+        const issues:string[]=[...(routeDataIssuesByDuty.get(d.id)??[])];
         if(!d.driver_name)issues.push("Driver name could not be resolved; shift legality can still be screened but a driver must be allocated.");
         if(!d.vehicle_id)issues.push("Vehicle ID could not be resolved; capacity cannot be verified until a vehicle is allocated.");
         if(d.capacity_status==="FAIL")issues.push("Vehicle "+(d.vehicle_id??"unknown")+" is over capacity: "+(d.seats??0)+" passengers against "+(d.vehicle_capacity??0)+" seats.");
